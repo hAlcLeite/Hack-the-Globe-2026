@@ -1,0 +1,11 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Internal Hackathon Docs
+docs/context.txt
+docs/rules.txt
+
+# (Explicitly NOT ignoring docs/ARCHITECTURE.md as requested)
+!docs/ARCHITECTURE.md
