@@ -27,7 +27,7 @@
 - [ ] **ECCC Datamart ingestion** (`ingestion/eccc.py`)
   - Pull HRDPS wind vectors (speed + direction) for fire zones
   - Pull temperature and humidity for CFFDRS index calculation
-- [ ] **DynamoDB integration** (`core/db.py`)
+- [x] **DynamoDB integration** (`core/db.py`)
   - Set up `boto3` client with environment credentials
   - Write/read helpers for `FireEvent`, `BurnProbabilityGrid`, `AssetInventory`
   - Replace all dummy data with real DynamoDB reads
