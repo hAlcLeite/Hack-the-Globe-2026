@@ -9,3 +9,5 @@ docs/rules.txt
 
 # (Explicitly NOT ignoring docs/ARCHITECTURE.md as requested)
 !docs/ARCHITECTURE.md
+plan.md
+frontend/node_modules
