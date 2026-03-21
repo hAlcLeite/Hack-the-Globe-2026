@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # AWS / DynamoDB
     AWS_ACCESS_KEY_ID: str = "dummy"
     AWS_SECRET_ACCESS_KEY: str = "dummy"
+    AWS_SESSION_TOKEN: str | None = None
     AWS_REGION: str = "ca-central-1"
     DYNAMODB_TABLE_NAME: str = "canopy-os-events"
 

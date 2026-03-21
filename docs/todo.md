@@ -1,15 +1,15 @@
 # CanopyOS Backend — To-Do List
 
-## Phase 1: Skeleton + Dummy Data ✅ (In Progress)
+## Phase 1: Skeleton + Dummy Data ✅
 - [x] Set up `pyproject.toml` with `uv`
-- [/] Scaffold `backend/src/` directory structure
-  - [/] `main.py` — FastAPI app entry point
-  - [/] `core/config.py` — environment variable loader
-  - [/] `api/fires.py` — fire incident routes
-  - [/] `api/predictions.py` — burn probability map routes
-  - [/] `api/assets.py` — first-responder asset routes
-  - [/] `api/choke_points.py` — RL choke point recommendation routes
-  - [/] `ingestion/dummy.py` — dummy data generators for all above
+- [x] Scaffold `backend/src/` directory structure
+  - [x] `main.py` — FastAPI app entry point
+  - [x] `core/config.py` — environment variable loader
+  - [x] `api/fires.py` — fire incident routes
+  - [x] `api/predictions.py` — burn probability map routes
+  - [x] `api/assets.py` — first-responder asset routes
+  - [x] `api/choke_points.py` — RL choke point recommendation routes
+  - [x] `ingestion/dummy.py` — dummy data generators for all above
 
 ## Phase 2: Real Data Ingestion
 - [ ] **NASA FIRMS ingestion** (`ingestion/firms.py`)
@@ -28,9 +28,10 @@
   - Pull HRDPS wind vectors (speed + direction) for fire zones
   - Pull temperature and humidity for CFFDRS index calculation
 - [x] **DynamoDB integration** (`core/db.py`)
-  - Set up `boto3` client with environment credentials
-  - Write/read helpers for `FireEvent`, `BurnProbabilityGrid`, `AssetInventory`
-  - Replace all dummy data with real DynamoDB reads
+  - [x] Set up `boto3` client with environment credentials
+  - [x] Write helpers: `put_fire_event` — seeded 3 fires live ✅
+  - [x] Read helpers: `get_fire_event`, `get_all_fire_events`
+  - [x] `GET /api/v1/fires` and `GET /api/v1/fires/{fire_id}` read from DynamoDB
 
 ## Phase 3: ML Models
 - [ ] **XGBoost Spread Model** (`models/spread_model.py`)
@@ -60,7 +61,7 @@
 
 ## Environment Variables Needed (`.env`)
 - [ ] `NASA_FIRMS_API_KEY` — from https://firms.modaps.eosdis.nasa.gov
-- [ ] `AWS_ACCESS_KEY_ID` — AWS credentials for DynamoDB
-- [ ] `AWS_SECRET_ACCESS_KEY`
-- [ ] `AWS_REGION` (e.g. `ca-central-1`)
-- [ ] `DYNAMODB_TABLE_NAME`
+- [x] `AWS_ACCESS_KEY_ID` — configured ✅
+- [x] `AWS_SECRET_ACCESS_KEY` — configured ✅
+- [x] `AWS_REGION` — `ca-central-1` ✅
+- [x] `DYNAMODB_TABLE_NAME` — `canopy-os-events` ✅
