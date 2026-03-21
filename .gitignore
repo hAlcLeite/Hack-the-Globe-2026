@@ -23,3 +23,6 @@ venv/
 # Node / Next.js
 node_modules/
 .next/
+
+# macOS
+.DS_Store
