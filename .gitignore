@@ -9,6 +9,7 @@ docs/rules.txt
 
 # (Explicitly NOT ignoring docs/ARCHITECTURE.md as requested)
 !docs/ARCHITECTURE.md
+plan.md
 
 # Python
 __pycache__/
@@ -19,6 +20,9 @@ venv/
 *.egg-info/
 .pytest_cache/
 
-# Node
+# Node / Next.js
 node_modules/
 .next/
+
+# macOS
+.DS_Store
