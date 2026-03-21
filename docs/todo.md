@@ -12,10 +12,10 @@
   - [x] `ingestion/dummy.py` — dummy data generators for all above
 
 ## Phase 2: Real Data Ingestion
-- [ ] **NASA FIRMS ingestion** (`ingestion/firms.py`)
-  - Sign up for free API key at https://firms.modaps.eosdis.nasa.gov/api/area/
-  - Pull MODIS/VIIRS active fire hotspots for Canada (bounding box)
-  - Normalize to `FireEvent` schema
+- [x] **NASA FIRMS ingestion** (`ingestion/firms.py`)
+  - [x] Sign up for free API key at https://firms.modaps.eosdis.nasa.gov/api/area/
+  - [x] Pull MODIS/VIIRS active fire hotspots for Canada (bounding box)
+  - [x] Normalize to `FireEvent` schema
 - [ ] **CWFIS/NRCan ingestion** (`ingestion/cwfis.py`)
   - Pull national active fire perimeters (GeoJSON, no auth needed)
   - Pull CFFDRS fire danger indices (FWI, ISI, BUI)
