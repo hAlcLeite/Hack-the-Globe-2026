@@ -28,5 +28,18 @@ The way I want to deisng it is similar to the maven smart system dahsboard (http
 From there in mission control there are multiple tools, we see the amount of ground troops available and sending them to correct locations as well as the taks they should be doing and where. 
 
 For example where our model predicts it will be the worst we send in 50/120 first-responders to start selective burning that area which would result in saving it if the model was correct.
+## Competitive Landscape & Product Differentiation
 
- Please also do resesarch fi there is any product that does this currently, In canada is the first priority but do see compeititon in the states
+### Canadian Competitors
+1. **SenseNet (Vancouver)**: Uses ground sensors, cameras, and satellite data with their "SenseCore" AI to predict fire behavior. Partnered with Rogers.
+2. **AltaML (Edmonton)**: Built an AI tool for Alberta Wildfire predicting new fire likelihoods (80% accuracy) to help duty officers deploy resources.
+3. **AISIX Solutions (Vancouver)**: Offers "Wildfire 3.0" using BurnP3+ to simulate wildfire behavior for governments and insurers.
+4. **FireSafe AI & Firebird**: Startups using sensor fusion (cameras, mobile towers) and ML to predict ignition points and generate risk scores.
+
+### US / California Competitors
+1. **Ponderosa AI (Chico, CA)**: Uses AI-powered drones for early detection, mapping hotspots, and even dropping fire retardants.
+2. **Seneca**: Uses autonomous drone fleets to detect and suppress fires before they grow.
+3. **Lockheed Martin / Project Maven (DoD)**: Project Maven's AI vision tech (Maven Smart System) is actively being adapted for domestic disaster response. The California Air National Guard uses it with MQ-9 Reaper drones (Project Theia) to process video in seconds for wildfire combat.
+
+### CanopyOS Differentiator (The "Palantir/Project Maven" Approach)
+While most competitors focus on **early detection** (sensors/drones) or predicting **ignition points**, CanopyOS specifically targets the **tactical containment phase** of an *already out-of-control* fire. Our unique value proposition is the **Reinforcement Learning (RL) Tactical Agent**: treating interagency resource deployment (ground troops, bulldozers) as a high-stakes portfolio optimization problem to calculate precise "choke points" for selective burning and containment breaks. We are building the macro-level "mission control" (similar to Maven) rather than the micro-level detection sensor network.
