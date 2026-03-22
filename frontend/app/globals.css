@@ -93,12 +93,17 @@
   100% { transform: translateY(100vh); }
 }
 
-/* Mapbox overrides */
+/* MapLibre / Mapbox overrides — hide logo and attribution */
+.maplibregl-ctrl-logo,
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib-button,
+.maplibregl-ctrl-attrib-inner,
 .mapboxgl-ctrl-logo,
 .mapboxgl-ctrl-attrib {
   display: none !important;
 }
 
+.maplibregl-canvas,
 .mapboxgl-canvas {
   outline: none;
 }
