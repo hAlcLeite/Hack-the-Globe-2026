@@ -173,7 +173,7 @@ def generate_synthetic_dataset(n_samples: int = 6000, seed: int = 42) -> pd.Data
 # ── Training ──────────────────────────────────────────────────────────────────
 
 def train_spread_model(n_samples: int = 6000) -> tuple[XGBRegressor, XGBRegressor, dict]:
-    print(f"🌲 Generating {n_samples} synthetic fire spread samples...")
+    print(f"Generating {n_samples} synthetic fire spread samples...")
     df = generate_synthetic_dataset(n_samples=n_samples)
 
     X = df[FEATURE_COLS]
@@ -194,11 +194,11 @@ def train_spread_model(n_samples: int = 6000) -> tuple[XGBRegressor, XGBRegresso
         n_jobs=-1,
     )
 
-    print("🔥 Training 1-hour spread model...")
+    print("Training 1-hour spread model...")
     model_1h = XGBRegressor(**xgb_params)
     model_1h.fit(X_train, y1_train)
 
-    print("🔥 Training 3-hour spread model...")
+    print("Training 3-hour spread model...")
     model_3h = XGBRegressor(**xgb_params)
     model_3h.fit(X_train, y3_train)
 
@@ -214,7 +214,7 @@ def train_spread_model(n_samples: int = 6000) -> tuple[XGBRegressor, XGBRegresso
 
     joblib.dump(model_1h, MODEL_1H_PATH)
     joblib.dump(model_3h, MODEL_3H_PATH)
-    print(f"💾 Models saved → {MODEL_DIR}")
+    print(f"Models saved -> {MODEL_DIR}")
 
     return model_1h, model_3h, metrics
 
@@ -345,16 +345,16 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING)  # suppress httpx INFO noise
 
     print("=" * 65)
-    print("  CanopyOS XGBoost Spread Model v2 — Wind U/V · Slope · Trend")
+    print("  FireGrid XGBoost Spread Model v2 — Wind U/V · Slope · Trend")
     print("=" * 65)
 
     model_1h, model_3h, metrics = train_spread_model(n_samples=6000)
 
-    print("\n📊 Evaluation (20% held-out test set):")
+    print("\nEvaluation (20% held-out test set):")
     print(f"  1h model:  MAE = {metrics['1h_mae_m']} m   R² = {metrics['1h_r2']}")
     print(f"  3h model:  MAE = {metrics['3h_mae_m']} m   R² = {metrics['3h_r2']}")
 
-    print("\n🔮 Live predictions (real weather from Open-Meteo):\n")
+    print("\nLive predictions (real weather from Open-Meteo):\n")
     demo_fires = [
         {"fire_id": "BC-2026-001", "name": "Okanagan Ridge Fire",    "latitude": 49.9071, "longitude": -119.4960, "area_hectares": 12450},
         {"fire_id": "BC-2026-003", "name": "Fraser Valley Approach", "latitude": 49.3845, "longitude": -121.4483, "area_hectares": 250},
@@ -365,16 +365,16 @@ if __name__ == "__main__":
         result = predict_spread(fire["fire_id"], fire)
         wx = result.get("features_used", {})
         print(f"━━━ {fire['name']} ({fire['fire_id']}) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print(f"  🌬️  Wind:        {wx.get('wind_speed_km_h', '?'):.1f} km/h  "
-              f"→ U={wx.get('wind_u', 0):.1f}, V={wx.get('wind_v', 0):.1f}")
-        print(f"  🌡️  Temp/RH:    {wx.get('temperature_c', '?')}°C / {wx.get('relative_humidity_pct', '?')}% RH")
-        print(f"  ⛰️  Slope:      {wx.get('slope_pct', 5.0):.0f}%   RH trend: {wx.get('rh_trend_24h', -8.0):.0f}% per 24h")
-        print(f"  🔴 Area:        {fire['area_hectares']:,} ha")
-        print(f"  🟠 +1h spread: {result['spread_1h_m']:,} m")
-        print(f"  🟡 +3h spread: {result['spread_3h_m']:,} m")
+        print(f"  Wind:        {wx.get('wind_speed_km_h', '?'):.1f} km/h  "
+              f"-> U={wx.get('wind_u', 0):.1f}, V={wx.get('wind_v', 0):.1f}")
+        print(f"  Temp/RH:     {wx.get('temperature_c', '?')}°C / {wx.get('relative_humidity_pct', '?')}% RH")
+        print(f"  Slope:       {wx.get('slope_pct', 5.0):.0f}%   RH trend: {wx.get('rh_trend_24h', -8.0):.0f}% per 24h")
+        print(f"  Area:        {fire['area_hectares']:,} ha")
+        print(f"  +1h spread:  {result['spread_1h_m']:,} m")
+        print(f"  +3h spread:  {result['spread_3h_m']:,} m")
         print()
 
-    print("📈 Feature importances (1h model — sorted):")
+    print("Feature importances (1h model — sorted):")
     fi = dict(zip(FEATURE_COLS, model_1h.feature_importances_))
     for feat, imp in sorted(fi.items(), key=lambda x: -x[1]):
         bar = "█" * int(imp * 50)

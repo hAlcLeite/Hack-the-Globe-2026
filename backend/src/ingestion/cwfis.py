@@ -32,7 +32,7 @@ TARGET_PROVINCES = {"BC", "AB"}
 
 
 def _severity_from_status(status: str) -> str:
-    """Map CWFIS fire status codes to CanopyOS severity labels."""
+    """Map CWFIS fire status codes to FireGrid severity labels."""
     s = status.upper().strip()
     if "OUT OF CONTROL" in s or s == "OC":
         return "extreme"
@@ -45,7 +45,7 @@ def _severity_from_status(status: str) -> str:
 
 def _normalize_cwfis_row(row: dict) -> Optional[dict]:
     """
-    Normalize a single CWFIS CSV row into a CanopyOS FireEvent dict.
+    Normalize a single CWFIS CSV row into a FireGrid FireEvent dict.
 
     CWFIS CSV columns (as of 2024):
         agency, firename, lat, lon, startdate, hectares, status, stage_of_control
@@ -153,9 +153,9 @@ def get_cwfis_fires() -> list[dict]:
 if __name__ == "__main__":
     import json
     logging.basicConfig(level=logging.INFO)
-    print("🍁 Fetching CWFIS active fires (NRCan)...")
+    print("Fetching CWFIS active fires (NRCan)...")
     fires = get_cwfis_fires()
-    print(f"\n✅ Got {len(fires)} fires in BC + AB.\n")
+    print(f"\nGot {len(fires)} fires in BC + AB.\n")
     if fires:
         print("Sample fire:")
         print(json.dumps(fires[0], indent=2))

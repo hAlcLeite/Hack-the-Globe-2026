@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     )
 
     # App
-    APP_NAME: str = "CanopyOS API"
+    APP_NAME: str = "FireGrid API"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
 
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str = "dummy"
     AWS_SESSION_TOKEN: str | None = None
     AWS_REGION: str = "ca-central-1"
-    DYNAMODB_TABLE_NAME: str = "canopy-os-events"
+    DYNAMODB_TABLE_NAME: str = "firegrid-events"
 
     # Data source toggle — set to True once real integrations are wired up
     USE_DUMMY_DATA: bool = True

@@ -1,8 +1,8 @@
-# CanopyOS ML Architecture
+# FireGrid ML Architecture
 
 ## Overview
 
-CanopyOS uses a two-stage ML pipeline:
+FireGrid uses a two-stage ML pipeline:
 
 1. **XGBoost Spread Model** — Supervised learning. Answers: *"How far will this fire spread?"*
 2. **PPO Tactical Agent** *(planned)* — Reinforcement learning. Answers: *"Where should we deploy assets to stop it?"*

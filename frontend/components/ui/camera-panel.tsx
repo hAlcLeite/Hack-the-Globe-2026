@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Video, ChevronLeft, ChevronRight } from "lucide-react";
-import { CAMERA_FEEDS } from "@/data/fake-wildfire";
+import { CAMERA_FEEDS } from "@/data/demo-wildfire";
 import { cn } from "@/lib/utils";
 
 const INTENSITY_COLORS: Record<string, string> = {

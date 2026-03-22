@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hack-the-globe-backend"
 version = "0.1.0"
-description = "CanopyOS — Unified Canadian Wildfire Tactical Command Backend"
+description = "FireGrid — Unified Canadian Wildfire Tactical Command Backend"
 requires-python = ">=3.12"
 dependencies = [
   # API Framework

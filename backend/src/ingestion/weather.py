@@ -157,16 +157,16 @@ if __name__ == "__main__":
         {"fire_id": "AB-2026-001", "name": "Peace River Complex",   "latitude": 56.2370,  "longitude": -117.2900},
     ]
 
-    print("🌡️  Fetching fire weather from Open-Meteo...\n")
+    print("Fetching fire weather from Open-Meteo...\n")
     results = get_weather_for_fires(test_fires)
 
     for fire_id, wx in results.items():
         print(f"━━━ {fire_id} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print(f"  🌬️  Wind:        {wx['wind_speed_km_h']} km/h @ {wx['wind_direction_deg']}°")
-        print(f"  🌡️  Temperature: {wx['temperature_c']} °C")
-        print(f"  💧  Humidity:   {wx['relative_humidity_pct']} %")
-        print(f"  🌧️  Precip:     {wx['precipitation_mm']} mm")
-        print(f"  🔵  Dew Point:  {wx['dew_point_c']} °C")
+        print(f"  Wind:        {wx['wind_speed_km_h']} km/h @ {wx['wind_direction_deg']}°")
+        print(f"  Temperature: {wx['temperature_c']} °C")
+        print(f"  Humidity:    {wx['relative_humidity_pct']} %")
+        print(f"  Precip:      {wx['precipitation_mm']} mm")
+        print(f"  Dew Point:   {wx['dew_point_c']} °C")
         print()
 
-    print(f"✅ Weather data fetched for {len(results)}/{len(test_fires)} fires.")
+    print(f"Weather data fetched for {len(results)}/{len(test_fires)} fires.")

@@ -43,12 +43,12 @@ def train(
         from stable_baselines3.common.callbacks import EvalCallback
         from src.models.fire_env import WildfireEnv
     except ImportError as e:
-        print(f"❌ Missing dependency: {e}")
+        print(f"Missing dependency: {e}")
         print("   Run: uv sync")
         sys.exit(1)
 
     print("=" * 60)
-    print("  CanopyOS PPO Tactical Agent — Training")
+    print("  FireGrid PPO Tactical Agent — Training")
     print("=" * 60)
     print(f"  Timesteps:    {total_timesteps:,}")
     print(f"  Spread rate:  {spread_rate_m_per_min} m/min")
@@ -81,14 +81,14 @@ def train(
         device="cpu",
     )
 
-    print("🤖 Training PPO agent (this takes ~2-4 minutes)...\n")
+    print("Training PPO agent (this takes ~2-4 minutes)...\n")
     model.learn(total_timesteps=total_timesteps)
 
     model.save(str(MODEL_SAVE_PATH))
-    print(f"\n💾 PPO model saved → {MODEL_SAVE_PATH}.zip")
+    print(f"\nPPO model saved -> {MODEL_SAVE_PATH}.zip")
 
     # Quick evaluation
-    print("\n🔮 Running quick inference test...")
+    print("\nRunning quick inference test...")
     from src.models.rl_agent import get_tactical_recommendations
     demo_fire = {
         "fire_id": "BC-2026-001",
@@ -99,12 +99,12 @@ def train(
     demo_spread = {"spread_1h_m": 900, "spread_3h_m": 2700}
     waypoints = get_tactical_recommendations("BC-2026-001", demo_fire, demo_spread)
 
-    print(f"\n✅ Generated {len(waypoints)} tactical waypoints:")
+    print(f"\nGenerated {len(waypoints)} tactical waypoints:")
     for i, wp in enumerate(waypoints, 1):
         print(f"  {i}. [{wp['asset_type'].upper()}] "
               f"({wp['latitude']}, {wp['longitude']}) — {wp['rationale']}")
 
-    print(f"\n✅ Training complete! Model ready at {MODEL_SAVE_PATH}.zip")
+    print(f"\nTraining complete. Model ready at {MODEL_SAVE_PATH}.zip")
     print("   Test via API: Invoke-RestMethod http://localhost:8000/api/v1/choke_points/BC-2026-001")
 
 

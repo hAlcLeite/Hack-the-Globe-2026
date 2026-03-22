@@ -1,5 +1,5 @@
 /**
- * lib/api.ts — CanopyOS Backend API Client
+ * lib/api.ts — FireGrid Backend API Client
  *
  * All calls go to the FastAPI backend running on localhost:8000.
  * Set NEXT_PUBLIC_API_URL in your .env.local to override for production.
@@ -55,7 +55,7 @@ export async function fetchFires(): Promise<FireEvent[]> {
       f.metadata ?? f
     );
   } catch (err) {
-    console.error("[CanopyOS API] fetchFires failed:", err);
+    console.error("[FireGrid API] fetchFires failed:", err);
     return [];
   }
 }
@@ -73,7 +73,7 @@ export async function fetchLiveFires(): Promise<FireEvent[]> {
     const data: LiveFiresResponse = await res.json();
     return data.fires;
   } catch (err) {
-    console.error("[CanopyOS API] fetchLiveFires failed:", err);
+    console.error("[FireGrid API] fetchLiveFires failed:", err);
     return [];
   }
 }
@@ -89,7 +89,7 @@ export async function fetchFireById(fireId: string): Promise<FireEvent | null> {
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return await res.json();
   } catch (err) {
-    console.error(`[CanopyOS API] fetchFireById(${fireId}) failed:`, err);
+    console.error(`[FireGrid API] fetchFireById(${fireId}) failed:`, err);
     return null;
   }
 }
@@ -139,7 +139,7 @@ export async function fetchLiveSpreadPrediction(
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return await res.json();
   } catch (err) {
-    console.error("[CanopyOS API] fetchLiveSpreadPrediction failed:", err);
+    console.error("[FireGrid API] fetchLiveSpreadPrediction failed:", err);
     return null;
   }
 }
@@ -186,7 +186,7 @@ export async function fetchLiveChokePoints(
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return await res.json();
   } catch (err) {
-    console.error("[CanopyOS API] fetchLiveChokePoints failed:", err);
+    console.error("[FireGrid API] fetchLiveChokePoints failed:", err);
     return null;
   }
 }

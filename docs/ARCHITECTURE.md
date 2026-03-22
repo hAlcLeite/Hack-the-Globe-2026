@@ -1,8 +1,8 @@
-# 🏗️ CanopyOS — Systems Architecture
+# FireGrid — Systems Architecture
 
 ## Overview
 
-CanopyOS is a B2G (Business-to-Government) tactical command platform that unifies Canada's historically fragmented wildfire intelligence pipeline. The system ingests disparate public data feeds from federal, provincial, and satellite sources, fuses them in real time, and exposes AI-driven tactical recommendations to incident commanders through a geospatial command dashboard.
+FireGrid is a B2G (Business-to-Government) tactical command platform that unifies Canada's historically fragmented wildfire intelligence pipeline. The system ingests disparate public data feeds from federal, provincial, and satellite sources, fuses them in real time, and exposes AI-driven tactical recommendations to incident commanders through a geospatial command dashboard.
 
 The architecture is composed of **four decoupled layers**: Data Ingestion → Predictive Core → Tactical Command → Command Dashboard.
 
@@ -12,7 +12,7 @@ The architecture is composed of **four decoupled layers**: Data Ingestion → Pr
 
 ```mermaid
 graph TD
-    subgraph External["🌐 External Data Sources"]
+    subgraph External["External Data Sources"]
         A1[CWFIS / NRCan Fire M3]
         A2[CIFFC Situation Reports]
         A3[BC Wildfire Service API]
@@ -21,25 +21,25 @@ graph TD
         A6[ECCC Datamart — Weather]
     end
 
-    subgraph Ingestion["⚙️ Layer 1 — Unification Engine (FastAPI)"]
+    subgraph Ingestion["Layer 1 — Unification Engine (FastAPI)"]
         B[Ingestion Aggregators]
         B1[JSON + GeoJSON Normalizer]
         B2[AWS DynamoDB]
     end
 
-    subgraph Prediction["🔥 Layer 2 — Predictive Core"]
+    subgraph Prediction["Layer 2 — Predictive Core"]
         C[XGBoost Fire Spread Model]
         C1[CFFDRS Indices + Wind Vectors]
         C2[24h Burn Probability Map]
     end
 
-    subgraph Tactical["🎯 Layer 3 — Tactical Command"]
+    subgraph Tactical["Layer 3 — Tactical Command"]
         D[RL Optimization Agent]
         D1[Asset Inventory — Crews / Aircraft / Dozers]
         D2[Choke Point Recommendations]
     end
 
-    subgraph Frontend["🖥️ Layer 4 — Command Dashboard"]
+    subgraph Frontend["Layer 4 — Command Dashboard"]
         E[Next.js + Mapbox GL]
         E1[Live Fire Perimeter Layer]
         E2[Predictive Spread Overlay]
@@ -117,8 +117,6 @@ graph TD
 ---
 
 ## Layer 4 — Command Dashboard (Frontend)
-
-> **Note:** Frontend is deferred for now. High-level spec documented for reference.
 
 **Stack:** Next.js (TypeScript) + Mapbox GL JS, dark-mode interface.
 

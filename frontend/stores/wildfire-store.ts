@@ -6,7 +6,7 @@ import {
   GROUND_CREW_TEAMS,
   FIRE_ACTIONS,
   WILDFIRE_INCIDENT,
-} from "@/data/fake-wildfire";
+} from "@/data/demo-wildfire";
 import {
   type FireSnapshot,
   buildInitialSnapshot,

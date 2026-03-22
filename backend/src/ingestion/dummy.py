@@ -1,8 +1,7 @@
 """
-dummy.py — Dummy data generators for all CanopyOS data types.
+dummy.py — Dummy data generators for all FireGrid data types.
 
-These are used during Phase 1 development before real API integrations are wired up.
-All generators return data conforming to the same Pydantic schemas used in production.
+These helpers keep the API usable when live data sources are unavailable.
 """
 
 import random

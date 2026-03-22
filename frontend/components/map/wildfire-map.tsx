@@ -14,7 +14,7 @@ import { AlertTriangle, ChevronRight, Flame, ZoomIn } from "lucide-react";
 import { useWildfireStore } from "@/stores/wildfire-store";
 import type { Resource } from "@/stores/wildfire-store";
 import type { Waypoint } from "@/lib/api";
-import { WILDFIRE_INCIDENT, FIREBREAK_ROAD_GEOJSON } from "@/data/fake-wildfire";
+import { WILDFIRE_INCIDENT, FIREBREAK_ROAD_GEOJSON } from "@/data/demo-wildfire";
 import { CANADA_PROVINCE_LABELS_GEOJSON } from "@/data/canada-provinces";
 import { cn } from "@/lib/utils";
 

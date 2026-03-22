@@ -1,18 +1,18 @@
-# 🌲 FireGrid — National Wildfire Tactical Intelligence Platform
+# FireGrid — National Wildfire Tactical Intelligence Platform
 
 > **Hack the Globe 2026** — Built by Team FireGrid
 
-FireGrid is a **Palantir-style predictive command system** for Canadian wildland fire response. Canada's wildfire intelligence is historically fragmented across provincial agencies (BC Wildfire Service, Alberta Wildfire), federal systems (CWFIS, CIFFC), and satellite networks. FireGrid unifies all of this into a single real-time platform — ingesting live fire data, fusing it with fire weather indices, and using machine learning to predict fire spread and optimize first-responder deployment.
+FireGrid is a **Palantir-style predictive command system** for Canadian wildfire fire response. Canada's wildfire intelligence has been historically fragmented across provincial agencies (BC Wildfire Service, Alberta Wildfire), federal systems (CWFIS, CIFFC), and satellite networks. FireGrid unifies all of this into a single real-time platform — ingesting live fire data, fusing it with fire weather indices, and using machine learning to predict fire spread and optimize first-responder deployment.
 
 ---
 
-## 🎯 The Problem
+## The Problem
 
 Canada has no centralized, real-time wildfire command system. Fire managers across BC, Alberta, and the territories are making life-or-death deployment decisions using siloed spreadsheets, phone calls between agencies, and manually reading satellite imagery. Every hour of delay in asset deployment costs thousands of hectares of forest. FireGrid solves this.
 
 ---
 
-## 🚀 What It Does
+## What It Does
 
 | Layer | What It Does |
 |---|---|
@@ -23,7 +23,7 @@ Canada has no centralized, real-time wildfire command system. Fire managers acro
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 | Component | Technology |
 |---|---|
@@ -36,7 +36,7 @@ Canada has no centralized, real-time wildfire command system. Fire managers acro
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```
 Hack-the-Globe-2026/
@@ -47,7 +47,7 @@ Hack-the-Globe-2026/
 │   │   ├── ingestion/         # Data pipeline (FIRMS, CWFIS, weather, CFFDRS)
 │   │   ├── models/            # XGBoost spread model + RL tactical agent
 │   │   └── main.py            # FastAPI app entry point
-│   ├── .env                   # ⚠️ Secret credentials — never commit
+│   ├── .env                   # Secret credentials — never commit
 │   └── pyproject.toml         # Python dependencies (managed by uv)
 │
 ├── frontend/                  # Next.js frontend (TypeScript)
@@ -64,12 +64,12 @@ Hack-the-Globe-2026/
 
 ---
 
-## ⚙️ Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.12+ with `uv` (`pip install uv`)
 - Node.js 18+ with `npm`
-- AWS account with DynamoDB table `canopy-os-events` in `ca-central-1`
+- AWS account with DynamoDB table `firegrid-events` in `ca-central-1`
 
 ### Backend
 ```bash
@@ -78,8 +78,8 @@ cp .env.example .env          # Fill in your AWS + FIRMS keys
 uv sync                       # Install Python deps
 uv run python -m src.core.seed_db   # Seed DynamoDB with demo fires
 uv run uvicorn src.main:app --reload
-# → API live at http://localhost:8000
-# → Swagger docs at http://localhost:8000/docs
+# API live at http://localhost:8000
+# Swagger docs at http://localhost:8000/docs
 ```
 
 ### Frontend
@@ -87,12 +87,12 @@ uv run uvicorn src.main:app --reload
 cd frontend
 npm install
 npm run dev
-# → Dashboard live at http://localhost:3000
+# Dashboard live at http://localhost:3000
 ```
 
 ---
 
-## 📡 API Endpoints
+## API Endpoints
 
 | Endpoint | Description |
 |---|---|
@@ -106,15 +106,15 @@ npm run dev
 
 ---
 
-## 🔑 Environment Variables
+## Environment Variables
 
-Copy `backend/.env.example` → `backend/.env`:
+Copy `backend/.env.example` -> `backend/.env`:
 
 ```env
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 AWS_REGION=ca-central-1
-DYNAMODB_TABLE_NAME=canopy-os-events
+DYNAMODB_TABLE_NAME=firegrid-events
 NASA_FIRMS_API_KEY=...          # Free: https://firms.modaps.eosdis.nasa.gov/api/area/
 USE_DUMMY_DATA=False
 ```

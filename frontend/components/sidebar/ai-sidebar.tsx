@@ -23,7 +23,7 @@ import type { AiRecommendation, ResourceType } from "@/stores/wildfire-store";
 import {
   WILDFIRE_INCIDENT,
   INFRASTRUCTURE_AT_RISK,
-} from "@/data/fake-wildfire";
+} from "@/data/demo-wildfire";
 import { cn } from "@/lib/utils";
 
 const PRIORITY_STYLES: Record<string, string> = {

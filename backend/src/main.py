@@ -1,5 +1,5 @@
 """
-main.py — CanopyOS FastAPI application entry point.
+main.py — FireGrid FastAPI application entry point.
 
 Run with:
     uv run uvicorn src.main:app --reload
@@ -19,7 +19,7 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description=(
-        "CanopyOS Tactical Command API — Unified Canadian wildfire intelligence pipeline. "
+        "FireGrid Tactical Command API — Unified Canadian wildfire intelligence pipeline. "
         "Aggregates multi-agency data, predicts fire spread with XGBoost, and recommends "
         "optimal first-responder deployment via a Reinforcement Learning agent."
     ),
@@ -59,7 +59,7 @@ def health_check():
 @app.get("/", tags=["System"])
 def root():
     return {
-        "message": "🌲 CanopyOS API is running.",
+        "message": "FireGrid API is running.",
         "docs": "/docs",
         "health": "/health",
     }

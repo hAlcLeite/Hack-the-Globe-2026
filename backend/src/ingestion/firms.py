@@ -2,7 +2,7 @@
 firms.py — NASA FIRMS (Fire Information for Resource Management System) ingestion.
 
 Pulls real VIIRS/NOAA satellite fire hotspot data over Western Canada (BC + AB)
-and normalizes it into CanopyOS FireEvent format.
+and normalizes it into FireGrid FireEvent format.
 
 API docs: https://firms.modaps.eosdis.nasa.gov/api/area/
 Rate limit: 5000 transactions / 10 minutes — we use 1 call per request (safe).
@@ -51,7 +51,7 @@ def _assign_province(lat: float, lon: float) -> str:
 
 def _frp_to_severity(frp: float) -> str:
     """
-    Convert Fire Radiative Power (MW) to a CanopyOS severity label.
+    Convert Fire Radiative Power (MW) to a FireGrid severity label.
     Thresholds based on FIRMS documentation and wildfire research.
     """
     if frp >= 500:
@@ -65,7 +65,7 @@ def _frp_to_severity(frp: float) -> str:
 
 def _normalize_hotspot(row: dict, idx: int) -> Optional[dict]:
     """
-    Normalize a single FIRMS CSV row into a CanopyOS FireEvent dict.
+    Normalize a single FIRMS CSV row into a FireGrid FireEvent dict.
     Returns None if the row is missing critical fields.
     """
     try:
@@ -184,9 +184,9 @@ def get_firms_fires() -> list[dict]:
 if __name__ == "__main__":
     import json
     logging.basicConfig(level=logging.INFO)
-    print("🔥 Fetching NASA FIRMS hotspots over Western Canada...")
+    print("Fetching NASA FIRMS hotspots over Western Canada...")
     fires = get_firms_fires()
-    print(f"\n✅ Got {len(fires)} hotspots.\n")
+    print(f"\nGot {len(fires)} hotspots.\n")
     if fires:
         print("Sample hotspot:")
         print(json.dumps(fires[0], indent=2))

@@ -1,5 +1,3 @@
-// Fire location: Cariboo Plateau, BC interior — remote forested area, no major cities
-// Williams Lake is ~70km south. Heavily forested Crown land with FSR roads.
 export const WILDFIRE_INCIDENT = {
   id: "cariboo-plateau-2026",
   name: "Cariboo Plateau Fire",
@@ -22,8 +20,6 @@ export const WILDFIRE_INCIDENT = {
   progression: "Head fire moving SE at ~280 m/hr. Torching in mature lodgepole pine.",
 };
 
-// Forest Service Road acting as natural firebreak / access corridor
-// Runs roughly E-W about 5 km south of fire center — within 3hr spread zone
 export const FIREBREAK_ROAD_GEOJSON = {
   type: "FeatureCollection" as const,
   features: [

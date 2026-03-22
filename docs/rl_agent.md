@@ -1,8 +1,8 @@
-# CanopyOS RL Tactical Agent — Architecture & Results
+# FireGrid RL Tactical Agent — Architecture & Results
 
 ## What Is It?
 
-The RL Tactical Agent is the second half of the CanopyOS ML pipeline.
+The RL Tactical Agent is the second half of the FireGrid ML pipeline.
 
 - **Stage 1 (XGBoost)** answers: *"How far will this fire spread?"*
 - **Stage 2 (PPO Agent)** answers: *"Where should we deploy helicopters and ground crews to stop it?"*
@@ -18,9 +18,9 @@ The agent learns inside a 50×50 grid-based wildfire simulator built as a [`gymn
 ```
 Grid cell states:
   0 = Unburned fuel
-  1 = Actively burning 🔥
+  1 = Actively burning
   2 = Burned / scorched
-  3 = Suppressed (firebreak / retardant) 💧
+  3 = Suppressed (firebreak / retardant)
 ```
 
 **Key design:** The fire doesn't spread at a fixed rate. The spread probability per timestep is computed from the XGBoost output:
@@ -76,7 +76,7 @@ PPO is the industry standard RL algorithm (same family as OpenAI's InstructGPT).
 |---|---|---|
 | 2,048 | **-84.8** | Agent wanders randomly, fire burns entire grid |
 | 10,240 | **-14.8** | Agent starts locating fire and deploying |
-| 26,624 | **+6.28** | ✅ Crosses zero — agent is net suppressing fire |
+| 26,624 | **+6.28** | Crosses zero — agent is net suppressing fire |
 | 51,200 | **+22.6** | Agent consistently initiates suppression early |
 
 The clean monotonic improvement from -84 to +22 indicates stable learning.

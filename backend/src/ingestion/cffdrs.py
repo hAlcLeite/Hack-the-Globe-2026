@@ -230,24 +230,24 @@ if __name__ == "__main__":
         {"fire_id": "AB-2026-001", "name": "Peace River Complex",   "latitude": 56.2370,  "longitude": -117.2900},
     ]
 
-    print("🔥 Fetching CFFDRS fire danger indices from CWFIS/NRCan...\n")
+    print("Fetching CFFDRS fire danger indices from CWFIS/NRCan...\n")
     results = get_cffdrs_for_fires(test_fires)
 
     for fire_id, cffdrs in results.items():
         print(f"━━━ {fire_id} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print(f"  📡 Nearest station: {cffdrs['source_station']} ({cffdrs['distance_km']} km away)")
-        print(f"  📅 Date: {cffdrs['date']}")
-        print(f"  🔥 FWI:            {cffdrs['fwi']}  (Fire Weather Index — overall danger)")
-        print(f"  💨 ISI:            {cffdrs['isi']}  (Initial Spread Index — spread rate)")
-        print(f"  🌿 BUI:            {cffdrs['bui']}  (Buildup Index — fuel availability)")
-        print(f"  ☀️  DC:             {cffdrs['dc']}   (Drought Code — deep dryness)")
-        print(f"  🍂 DMC:            {cffdrs['dmc']}  (Duff Moisture Code)")
-        print(f"  🌾 FFMC:           {cffdrs['ffmc']} (Fine Fuel Moisture Code)")
+        print(f"  Nearest station: {cffdrs['source_station']} ({cffdrs['distance_km']} km away)")
+        print(f"  Date: {cffdrs['date']}")
+        print(f"  FWI:  {cffdrs['fwi']}  (Fire Weather Index — overall danger)")
+        print(f"  ISI:  {cffdrs['isi']}  (Initial Spread Index — spread rate)")
+        print(f"  BUI:  {cffdrs['bui']}  (Buildup Index — fuel availability)")
+        print(f"  DC:   {cffdrs['dc']}   (Drought Code — deep dryness)")
+        print(f"  DMC:  {cffdrs['dmc']}  (Duff Moisture Code)")
+        print(f"  FFMC: {cffdrs['ffmc']} (Fine Fuel Moisture Code)")
         print()
 
-    print(f"✅ CFFDRS data fetched for {len(results)}/{len(test_fires)} fires.")
+    print(f"CFFDRS data fetched for {len(results)}/{len(test_fires)} fires.")
 
     if not results:
-        print("\n⚠️  No results — CWFIS may not have today's data yet (updates ~13:00 UTC),")
+        print("\nNo results — CWFIS may not have today's data yet (updates ~13:00 UTC),")
         print("   or fire season hasn't started. Try again later or check manually:")
         print(f"   {CFFDRS_BASE_URL.format(year=datetime.now().year)}")
