@@ -6,10 +6,37 @@ GET /api/v1/choke_points/{fire_id}
   Each waypoint has lat/lon, asset_type, rationale, and confidence score.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from src.core.db import get_fire_event
 
 router = APIRouter(prefix="/choke_points", tags=["Tactical Command"])
+
+
+@router.get("/live", summary="Live tactical recommendations from coordinates (no DB lookup)")
+def get_live_choke_points(
+    lat: float = Query(..., description="Fire latitude"),
+    lon: float = Query(..., description="Fire longitude"),
+    spread_1h_m: float = Query(default=1500.0, description="1-hour spread radius in metres"),
+    spread_3h_m: float = Query(default=4200.0, description="3-hour spread radius in metres"),
+):
+    """
+    Return PPO (or greedy) tactical deployment recommendations for any fire location
+    without requiring a DynamoDB record. Pass the spread radii from /predictions/live.
+    """
+    fire_data = {"latitude": lat, "longitude": lon}
+    spread_output = {"spread_1h_m": spread_1h_m, "spread_3h_m": spread_3h_m}
+
+    try:
+        from src.models.rl_agent import get_tactical_recommendations
+        waypoints = get_tactical_recommendations("live", fire_data, spread_output)
+        return {
+            "spread_1h_m": spread_1h_m,
+            "spread_3h_m": spread_3h_m,
+            "waypoints": waypoints,
+            "total_waypoints": len(waypoints),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Tactical agent error: {e}")
 
 
 @router.get("/{fire_id}", summary="Get tactical deployment recommendations (PPO agent)")

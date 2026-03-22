@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, ChevronRight, Flame, ZoomIn } from "lucide-react";
 import { useWildfireStore } from "@/stores/wildfire-store";
 import type { Resource } from "@/stores/wildfire-store";
+import type { Waypoint } from "@/lib/api";
 import { WILDFIRE_INCIDENT, FIREBREAK_ROAD_GEOJSON } from "@/data/fake-wildfire";
 import { CANADA_PROVINCE_LABELS_GEOJSON } from "@/data/canada-provinces";
 import { cn } from "@/lib/utils";
@@ -39,42 +40,7 @@ function haversineKm(a: [number, number], b: [number, number]): number {
   return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
 }
 
-function createCircleGeoJSON(center: [number, number], radiusMeters: number, points = 64) {
-  const [lng, lat] = center;
-  const pts: [number, number][] = [];
-  const R = 6371000;
-  for (let i = 0; i < points; i++) {
-    const angle = (i * 360) / points;
-    const bearing = (angle * Math.PI) / 180;
-    const lat1 = (lat * Math.PI) / 180;
-    const lng1 = (lng * Math.PI) / 180;
-    const lat2 = Math.asin(
-      Math.sin(lat1) * Math.cos(radiusMeters / R) +
-        Math.cos(lat1) * Math.sin(radiusMeters / R) * Math.cos(bearing)
-    );
-    const lng2 =
-      lng1 +
-      Math.atan2(
-        Math.sin(bearing) * Math.sin(radiusMeters / R) * Math.cos(lat1),
-        Math.cos(radiusMeters / R) - Math.sin(lat1) * Math.sin(lat2)
-      );
-    pts.push([(lng2 * 180) / Math.PI, (lat2 * 180) / Math.PI]);
-  }
-  pts.push(pts[0]);
-  return {
-    type: "FeatureCollection" as const,
-    features: [
-      {
-        type: "Feature" as const,
-        geometry: { type: "Polygon" as const, coordinates: [pts] },
-        properties: {},
-      },
-    ],
-  };
-}
-
 const FIRE_CENTER = WILDFIRE_INCIDENT.center;
-const FIRE_SPREAD = WILDFIRE_INCIDENT.spread;
 
 const RESOURCE_EMOJI: Record<string, string> = {
   "ground-crew": "👥",
@@ -114,6 +80,42 @@ function PlacementIndicator({ resource }: { resource: Resource }) {
       </div>
       <div className="mt-1 bg-blue-950/90 border border-blue-500/50 px-2 py-1 text-[9px] text-blue-300 whitespace-nowrap">
         {resource.name}
+      </div>
+    </div>
+  );
+}
+
+function WaypointMarker({ waypoint }: { waypoint: Waypoint }) {
+  const isAir = waypoint.asset_type === "helicopter";
+  return (
+    <div className="flex flex-col items-center cursor-default group">
+      <div
+        className={cn(
+          "h-8 w-8 rounded-full border-2 flex items-center justify-center text-sm shadow-lg relative",
+          isAir
+            ? "bg-blue-900/80 border-blue-400 shadow-blue-500/30"
+            : "bg-yellow-900/80 border-yellow-400 shadow-yellow-500/30"
+        )}
+      >
+        {isAir ? "🚁" : "🪖"}
+        {/* PPO confidence ring */}
+        <div
+          className={cn(
+            "absolute inset-0 rounded-full border-2 animate-ping opacity-30",
+            isAir ? "border-blue-400" : "border-yellow-400"
+          )}
+        />
+      </div>
+      {/* Tooltip on hover */}
+      <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1.5 bg-zinc-900/95 border border-zinc-700 px-2 py-1.5 text-[8px] text-zinc-300 whitespace-nowrap pointer-events-none max-w-[180px] space-y-0.5 shadow-xl">
+        <div className={cn("font-semibold", isAir ? "text-blue-400" : "text-yellow-400")}>
+          {isAir ? "Helicopter" : "Ground Crew"} · {waypoint.direction ?? "AI"}
+        </div>
+        <div className="text-zinc-400 leading-tight">{waypoint.rationale}</div>
+        <div className="text-zinc-600">
+          {waypoint.source === "ppo_agent" ? "PPO agent" : "Greedy heuristic"} ·{" "}
+          score {waypoint.score.toFixed(2)}
+        </div>
       </div>
     </div>
   );
@@ -192,6 +194,11 @@ export function WildfireMap() {
     fireActions,
     plannedBurnPoints,
     addPlannedBurnPoint,
+    fireSnapshot,
+    tickFireSimulation,
+    chokePoints,
+    backendStatus,
+    fetchBackendData,
   } = useWildfireStore();
 
   const allResources = [...groundCrews, ...fireActions];
@@ -200,6 +207,7 @@ export function WildfireMap() {
     ? allResources.find((r) => r.id === selectedResourceId) ?? null
     : null;
 
+  // Fly to the right view when viewLevel changes
   useEffect(() => {
     if (!mapRef.current || !mapLoaded) return;
     const map = mapRef.current;
@@ -215,6 +223,28 @@ export function WildfireMap() {
       map.flyTo({ center: FIRE_CENTER, zoom: 13, pitch: 60, bearing: -20, duration: 2500 });
     }
   }, [viewLevel, mapLoaded]);
+
+  // Globe (national/province) ↔ Mercator (incident) — custom WebGL layers need Mercator
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded) return;
+    const mb = (mapRef.current as any)?.getMap?.();
+    if (!mb) return;
+    mb.setProjection({ name: viewLevel === "incident" ? "mercator" : "globe" });
+  }, [viewLevel, mapLoaded]);
+
+  // Tick fire simulation every 3s while in incident view
+  useEffect(() => {
+    if (viewLevel !== "incident") return;
+    const id = setInterval(tickFireSimulation, 3000);
+    return () => clearInterval(id);
+  }, [viewLevel, tickFireSimulation]);
+
+  // Fetch real spread + choke points once when entering incident view
+  useEffect(() => {
+    if (viewLevel === "incident" && backendStatus === "idle") {
+      fetchBackendData();
+    }
+  }, [viewLevel, backendStatus, fetchBackendData]);
 
   // [M] hotkey toggles measure mode
   useEffect(() => {
@@ -291,11 +321,7 @@ export function WildfireMap() {
     };
   }, []);
 
-  // Memoized GeoJSON — stable references prevent Mapbox from seeing new source data every render
-  const fireRing3h = useMemo(() => createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.threeHour), []);
-  const fireRing1h = useMemo(() => createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.oneHour), []);
-  const fireCurrent = useMemo(() => createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.current), []);
-
+  // Planned burn line GeoJSON
   const burnLineGeoJSON = useMemo(() => {
     if (plannedBurnPoints.length < 2) return null;
     return {
@@ -354,7 +380,6 @@ export function WildfireMap() {
             "star-intensity": 0.5,
           });
 
-          // Re-add terrain DEM after every style switch (style.load clears raw API additions)
           const applyTerrain = () => {
             if (!mb.getSource("mapbox-dem")) {
               mb.addSource("mapbox-dem", {
@@ -376,6 +401,7 @@ export function WildfireMap() {
         antialias={true}
         attributionControl={false}
       >
+        {/* ── 3-D buildings (non-national only) ── */}
         {mapLoaded && viewLevel !== "national" && (
           <Layer
             id="3d-buildings"
@@ -386,13 +412,8 @@ export function WildfireMap() {
             minzoom={14}
             paint={{
               "fill-extrusion-color": [
-                "interpolate",
-                ["linear"],
-                ["get", "height"],
-                0,  "#4b5563",
-                20, "#6b7280",
-                50, "#9ca3af",
-                100,"#d1d5db",
+                "interpolate", ["linear"], ["get", "height"],
+                0, "#4b5563", 20, "#6b7280", 50, "#9ca3af", 100, "#d1d5db",
               ],
               "fill-extrusion-height": ["get", "height"],
               "fill-extrusion-base": ["get", "min_height"],
@@ -404,6 +425,7 @@ export function WildfireMap() {
           />
         )}
 
+        {/* ── Province outlines + labels (national + province) ── */}
         {mapLoaded && viewLevel !== "incident" && (
           <>
             <Source id="arcgis-provinces" type="geojson" data={ARCGIS_PROVINCES_URL}>
@@ -413,14 +435,8 @@ export function WildfireMap() {
                 layout={{ "line-cap": "round", "line-join": "round" }}
                 paint={{
                   "line-color": "#ffffff",
-                  "line-width": [
-                    "interpolate", ["linear"], ["zoom"],
-                    3, 4, 6, 6, 8, 10, 10, 14,
-                  ],
-                  "line-blur": [
-                    "interpolate", ["linear"], ["zoom"],
-                    3, 3, 6, 5, 8, 8, 10, 10,
-                  ],
+                  "line-width": ["interpolate", ["linear"], ["zoom"], 3, 4, 6, 6, 8, 10, 10, 14],
+                  "line-blur": ["interpolate", ["linear"], ["zoom"], 3, 3, 6, 5, 8, 8, 10, 10],
                   "line-opacity": 0.35,
                 }}
               />
@@ -430,10 +446,7 @@ export function WildfireMap() {
                 layout={{ "line-cap": "round", "line-join": "round" }}
                 paint={{
                   "line-color": "#ffffff",
-                  "line-width": [
-                    "interpolate", ["linear"], ["zoom"],
-                    3, 0.8, 6, 1.2, 8, 2, 10, 2.5,
-                  ],
+                  "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.8, 6, 1.2, 8, 2, 10, 2.5],
                   "line-opacity": 0.9,
                 }}
               />
@@ -446,46 +459,41 @@ export function WildfireMap() {
                 layout={{
                   "symbol-placement": "point",
                   "text-font": ["Open Sans SemiBold", "Arial Unicode MS Bold"],
-                  "text-size": [
-                    "interpolate", ["linear"], ["zoom"],
-                    3, 9, 5, 11, 8, 13, 10, 15,
-                  ],
+                  "text-size": ["interpolate", ["linear"], ["zoom"], 3, 9, 5, 11, 8, 13, 10, 15],
                   "text-letter-spacing": 0.06,
                   "text-allow-overlap": false,
                   "text-max-width": 8,
                   "text-pitch-alignment": "viewport",
                   "text-field": [
                     "case",
-                    ["==", ["get", "name"], "British Columbia"],    "British Columbia",
-                    ["==", ["get", "name"], "Alberta"],              "Alberta",
-                    ["==", ["get", "name"], "Saskatchewan"],         "Saskatchewan",
-                    ["==", ["get", "name"], "Manitoba"],             "Manitoba",
-                    ["==", ["get", "name"], "Ontario"],              "Ontario",
-                    ["==", ["get", "name"], "Quebec"],               "Québec",
-                    ["==", ["get", "name"], "New Brunswick"],        "New Brunswick",
-                    ["==", ["get", "name"], "Nova Scotia"],          "Nova Scotia",
+                    ["==", ["get", "name"], "British Columbia"], "British Columbia",
+                    ["==", ["get", "name"], "Alberta"], "Alberta",
+                    ["==", ["get", "name"], "Saskatchewan"], "Saskatchewan",
+                    ["==", ["get", "name"], "Manitoba"], "Manitoba",
+                    ["==", ["get", "name"], "Ontario"], "Ontario",
+                    ["==", ["get", "name"], "Quebec"], "Québec",
+                    ["==", ["get", "name"], "New Brunswick"], "New Brunswick",
+                    ["==", ["get", "name"], "Nova Scotia"], "Nova Scotia",
                     ["==", ["get", "name"], "Prince Edward Island"], "Prince Edward Island",
                     ["==", ["get", "name"], "Newfoundland and Labrador"], "Newfoundland & Labrador",
-                    ["==", ["get", "name"], "Yukon"],                "Yukon",
-                    ["==", ["get", "name"], "Northwest Territories"],"NW Territories",
-                    ["==", ["get", "name"], "Nunavut"],              "Nunavut",
-                    ["get", "name"]
+                    ["==", ["get", "name"], "Yukon"], "Yukon",
+                    ["==", ["get", "name"], "Northwest Territories"], "NW Territories",
+                    ["==", ["get", "name"], "Nunavut"], "Nunavut",
+                    ["get", "name"],
                   ],
                 }}
                 paint={{
                   "text-color": "#dbeafe",
                   "text-halo-color": "rgba(15, 23, 42, 0.95)",
                   "text-halo-width": 1.5,
-                  "text-opacity": [
-                    "interpolate", ["linear"], ["zoom"],
-                    3, 0.5, 5, 0.8, 8, 1,
-                  ],
+                  "text-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.5, 5, 0.8, 8, 1],
                 }}
               />
             </Source>
           </>
         )}
 
+        {/* ── Measure tool ── */}
         {measureLineGeoJSON && (
           <Source id="measure-line" type="geojson" data={measureLineGeoJSON}>
             <Layer
@@ -500,86 +508,157 @@ export function WildfireMap() {
             />
           </Source>
         )}
-
         {measurePoints.map((pt, i) => (
           <Marker key={i} longitude={pt[0]} latitude={pt[1]} anchor="center">
             <div className="h-3 w-3 rounded-full bg-yellow-400 border-2 border-yellow-200 shadow shadow-yellow-400/50" />
           </Marker>
         ))}
 
+        {/* ── FSR firebreak road (incident only) ── */}
         {mapLoaded && viewLevel === "incident" && (
           <Source id="firebreak-road" type="geojson" data={FIREBREAK_ROAD_GEOJSON}>
-            <Layer
-              id="firebreak-road-glow"
-              type="line"
-              paint={{
-                "line-color": "#78716c",
-                "line-width": 6,
-                "line-blur": 4,
-                "line-opacity": 0.3,
-              }}
-            />
-            <Layer
-              id="firebreak-road-line"
-              type="line"
-              paint={{
-                "line-color": "#a8a29e",
-                "line-width": 1.5,
-                "line-dasharray": [5, 3],
-                "line-opacity": 0.6,
-              }}
-            />
+            <Layer id="firebreak-road-glow" type="line" paint={{ "line-color": "#78716c", "line-width": 6, "line-blur": 4, "line-opacity": 0.3 }} />
+            <Layer id="firebreak-road-line" type="line" paint={{ "line-color": "#a8a29e", "line-width": 1.5, "line-dasharray": [5, 3], "line-opacity": 0.6 }} />
           </Source>
         )}
 
+        {/* ══════════════════════════════════════════════
+            FIRE LAYER STACK (incident view)
+            Bottom → Top:
+              1. Burn scar fill
+              2. 3h forecast fill + line
+              3. 1h forecast fill + line
+              4. Active perimeter fill + edge line
+              5. Hotspots
+            ══════════════════════════════════════════════ */}
         {viewLevel === "incident" && (
           <>
-            <Source id="fire-ring-3h" type="geojson" data={fireRing3h}>
-              <Layer id="fire-ring-3h-fill" type="fill" paint={{ "fill-color": "#d97706", "fill-opacity": 0.07 }} />
-              <Layer id="fire-ring-3h-line" type="line" paint={{ "line-color": "#d97706", "line-width": 1.5, "line-dasharray": [4, 3], "line-opacity": 0.7 }} />
+            {/* 1 · Burn scar — dark charcoal, soft edges */}
+            <Source id="burn-scar" type="geojson" data={fireSnapshot.burnScar}>
+              <Layer
+                id="burn-scar-fill"
+                type="fill"
+                paint={{ "fill-color": "#1c1209", "fill-opacity": 0.65 }}
+              />
+              <Layer
+                id="burn-scar-line"
+                type="line"
+                paint={{ "line-color": "#3b2512", "line-width": 1.5, "line-opacity": 0.5 }}
+              />
             </Source>
-            <Source id="fire-ring-1h" type="geojson" data={fireRing1h}>
-              <Layer id="fire-ring-1h-fill" type="fill" paint={{ "fill-color": "#f97316", "fill-opacity": 0.11 }} />
-              <Layer id="fire-ring-1h-line" type="line" paint={{ "line-color": "#f97316", "line-width": 2, "line-dasharray": [3, 2], "line-opacity": 0.85 }} />
+
+            {/* 2 · 3h forecast — faint amber shell */}
+            <Source id="fire-forecast-3h" type="geojson" data={fireSnapshot.forecast3h}>
+              <Layer
+                id="fire-forecast-3h-fill"
+                type="fill"
+                paint={{ "fill-color": "#78350f", "fill-opacity": 0.12 }}
+              />
+              <Layer
+                id="fire-forecast-3h-line"
+                type="line"
+                paint={{
+                  "line-color": "#d97706",
+                  "line-width": 1.5,
+                  "line-dasharray": [5, 4],
+                  "line-opacity": 0.6,
+                }}
+              />
             </Source>
-            <Source id="fire-current" type="geojson" data={fireCurrent}>
-              <Layer id="fire-current-fill" type="fill" paint={{ "fill-color": "#ef4444", "fill-opacity": 0.22 }} />
-              <Layer id="fire-current-line" type="line" paint={{ "line-color": "#ef4444", "line-width": 2.5, "line-opacity": 1 }} />
+
+            {/* 3 · 1h forecast — slightly stronger orange shell */}
+            <Source id="fire-forecast-1h" type="geojson" data={fireSnapshot.forecast1h}>
+              <Layer
+                id="fire-forecast-1h-fill"
+                type="fill"
+                paint={{ "fill-color": "#c2410c", "fill-opacity": 0.16 }}
+              />
+              <Layer
+                id="fire-forecast-1h-line"
+                type="line"
+                paint={{
+                  "line-color": "#f97316",
+                  "line-width": 2,
+                  "line-dasharray": [3, 3],
+                  "line-opacity": 0.8,
+                }}
+              />
+            </Source>
+
+            {/* 4 · Active perimeter — bright fill + solid glowing edge */}
+            <Source id="fire-current" type="geojson" data={fireSnapshot.perimeter}>
+              <Layer
+                id="fire-current-fill"
+                type="fill"
+                paint={{ "fill-color": "#ff5a1f", "fill-opacity": 0.22 }}
+              />
+              {/* Glow halo */}
+              <Layer
+                id="fire-current-glow"
+                type="line"
+                paint={{
+                  "line-color": "#ff5a1f",
+                  "line-width": 8,
+                  "line-blur": 6,
+                  "line-opacity": 0.35,
+                }}
+              />
+              {/* Crisp edge */}
+              <Layer
+                id="fire-current-line"
+                type="line"
+                paint={{
+                  "line-color": "#ffb347",
+                  "line-width": 2.5,
+                  "line-opacity": 0.95,
+                }}
+              />
+            </Source>
+
+            {/* 5 · Hotspots — individual heat points */}
+            <Source id="hotspots" type="geojson" data={fireSnapshot.hotspots}>
+              <Layer
+                id="hotspots-glow"
+                type="circle"
+                paint={{
+                  "circle-radius": 9,
+                  "circle-color": "#ff3b00",
+                  "circle-blur": 0.6,
+                  "circle-opacity": 0.3,
+                }}
+              />
+              <Layer
+                id="hotspots-core"
+                type="circle"
+                paint={{
+                  "circle-radius": 4,
+                  "circle-color": "#ff6b35",
+                  "circle-opacity": 0.85,
+                }}
+              />
             </Source>
           </>
         )}
 
+        {/* ── Planned burn line overlay ── */}
         {viewLevel === "incident" && burnLineGeoJSON && (
           <Source id="planned-burn-line" type="geojson" data={burnLineGeoJSON}>
-            <Layer
-              id="planned-burn-line-glow"
-              type="line"
-              paint={{ "line-color": "#f97316", "line-width": 8, "line-blur": 6, "line-opacity": 0.3 }}
-            />
-            <Layer
-              id="planned-burn-line-main"
-              type="line"
-              paint={{ "line-color": "#fb923c", "line-width": 3, "line-dasharray": [4, 2], "line-opacity": 0.95 }}
-            />
+            <Layer id="planned-burn-line-glow" type="line" paint={{ "line-color": "#f97316", "line-width": 8, "line-blur": 6, "line-opacity": 0.3 }} />
+            <Layer id="planned-burn-line-main" type="line" paint={{ "line-color": "#fb923c", "line-width": 3, "line-dasharray": [4, 2], "line-opacity": 0.95 }} />
           </Source>
         )}
-
         {viewLevel === "incident" && burnPreviewGeoJSON && (
           <Source id="planned-burn-preview" type="geojson" data={burnPreviewGeoJSON}>
-            <Layer
-              id="planned-burn-preview-line"
-              type="line"
-              paint={{ "line-color": "#f97316", "line-width": 2, "line-dasharray": [3, 3], "line-opacity": 0.55 }}
-            />
+            <Layer id="planned-burn-preview-line" type="line" paint={{ "line-color": "#f97316", "line-width": 2, "line-dasharray": [3, 3], "line-opacity": 0.55 }} />
           </Source>
         )}
-
         {viewLevel === "incident" && plannedBurnPoints.length >= 1 && (
           <Marker longitude={plannedBurnPoints[0][0]} latitude={plannedBurnPoints[0][1]} anchor="center">
             <div className="h-3 w-3 rounded-full bg-orange-500 border-2 border-orange-300 shadow shadow-orange-500/50" />
           </Marker>
         )}
 
+        {/* ── Fire dot markers (national + province views) ── */}
         {(viewLevel === "national" || viewLevel === "province") && (
           <Marker longitude={FIRE_CENTER[0]} latitude={FIRE_CENTER[1]} anchor="center">
             <div
@@ -610,6 +689,7 @@ export function WildfireMap() {
           </Marker>
         )}
 
+        {/* ── Deployed resource markers ── */}
         {viewLevel === "incident" &&
           deployedResources
             .filter((r) => r.type !== "planned-burn")
@@ -629,8 +709,17 @@ export function WildfireMap() {
               <PlacementIndicator resource={selectedResource} />
             </Marker>
           )}
+
+        {/* ── PPO / AI tactical waypoints ── */}
+        {viewLevel === "incident" &&
+          chokePoints.map((wp, i) => (
+            <Marker key={i} longitude={wp.longitude} latitude={wp.latitude} anchor="bottom">
+              <WaypointMarker waypoint={wp} />
+            </Marker>
+          ))}
       </Map>
 
+      {/* ── Breadcrumb banner ── */}
       {viewLevel !== "national" && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
           <motion.div
@@ -655,28 +744,70 @@ export function WildfireMap() {
         </div>
       )}
 
+      {/* ── Legend (incident view) ── */}
       {viewLevel === "incident" && (
         <div className="absolute bottom-28 right-4 z-10 pointer-events-none">
           <div className="bg-zinc-950/80 border border-zinc-800 backdrop-blur-sm px-3 py-2 space-y-1.5">
-            <div className="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">Fire Spread</div>
-            {[
-              { color: "bg-red-500", label: "Current perimeter" },
-              { color: "bg-orange-500", label: "+1 hour forecast" },
-              { color: "bg-amber-600", label: "+3 hour forecast" },
-            ].map(({ color, label }) => (
-              <div key={label} className="flex items-center gap-2">
-                <div className={cn("h-2 w-4 opacity-80", color)} />
-                <span className="text-[9px] text-zinc-400">{label}</span>
-              </div>
-            ))}
+            <div className="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">Fire Layers</div>
+
+            {/* Burn scar */}
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-4 bg-[#1c1209] border border-[#3b2512] opacity-90" />
+              <span className="text-[9px] text-zinc-400">Burn scar</span>
+            </div>
+
+            {/* Active perimeter */}
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-4 bg-[#ff5a1f] opacity-80" />
+              <span className="text-[9px] text-zinc-400">Active perimeter</span>
+            </div>
+
+            {/* Forecasts */}
+            <div className="flex items-center gap-2">
+              <div className="h-px w-4 border-t-2 border-dashed border-orange-500 opacity-80" />
+              <span className="text-[9px] text-zinc-400">+1 hr forecast</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-px w-4 border-t-2 border-dashed border-amber-600 opacity-70" />
+              <span className="text-[9px] text-zinc-400">+3 hr forecast</span>
+            </div>
+
+            {/* Hotspots */}
+            <div className="flex items-center gap-2">
+              <div className="h-2.5 w-2.5 rounded-full bg-[#ff6b35] opacity-85" />
+              <span className="text-[9px] text-zinc-400">Hotspots</span>
+            </div>
+
+            {/* Firebreak */}
             <div className="flex items-center gap-2 mt-1 pt-1 border-t border-zinc-800">
               <div className="h-px w-4 border-t-2 border-dashed border-stone-400 opacity-60" />
               <span className="text-[9px] text-zinc-500">Likely FSR firebreak</span>
             </div>
-            <div className={cn(
-              "flex items-center gap-2 mt-1 pt-1 border-t border-zinc-800 pointer-events-auto cursor-pointer select-none",
-              measureMode ? "opacity-100" : "opacity-60 hover:opacity-100"
-            )}
+
+            {/* Backend data status */}
+            <div className="flex items-center gap-2 mt-1 pt-1 border-t border-zinc-800">
+              <div
+                className={cn("h-1.5 w-1.5 rounded-full shrink-0", {
+                  "bg-zinc-600": backendStatus === "idle",
+                  "bg-yellow-500 animate-pulse": backendStatus === "loading",
+                  "bg-green-500": backendStatus === "loaded",
+                  "bg-red-500": backendStatus === "error",
+                })}
+              />
+              <span className="text-[9px] text-zinc-500">
+                {backendStatus === "idle" && "Awaiting backend"}
+                {backendStatus === "loading" && "Fetching real data…"}
+                {backendStatus === "loaded" && "XGBoost + PPO active"}
+                {backendStatus === "error" && "Backend offline — simulator"}
+              </span>
+            </div>
+
+            {/* Measure tool */}
+            <div
+              className={cn(
+                "flex items-center gap-2 mt-1 pt-1 border-t border-zinc-800 pointer-events-auto cursor-pointer select-none",
+                measureMode ? "opacity-100" : "opacity-60 hover:opacity-100"
+              )}
               onClick={() => { setMeasureMode(m => !m); setMeasurePoints([]); }}
             >
               <kbd className="text-[8px] bg-zinc-800 border border-zinc-700 px-1 rounded text-zinc-400">M</kbd>

@@ -5,7 +5,33 @@ import {
   INCIDENT_VIEW,
   GROUND_CREW_TEAMS,
   FIRE_ACTIONS,
+  WILDFIRE_INCIDENT,
 } from "@/data/fake-wildfire";
+import {
+  type FireSnapshot,
+  buildInitialSnapshot,
+  tickSnapshot,
+  updateSnapshotWithRealData,
+} from "@/lib/fire-simulator";
+import {
+  type Waypoint,
+  fetchLiveSpreadPrediction,
+  fetchLiveChokePoints,
+} from "@/lib/api";
+
+const WIND_DIR_DEG: Record<string, number> = {
+  N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315,
+};
+
+function makeInitialSnapshot(): FireSnapshot {
+  return buildInitialSnapshot(
+    WILDFIRE_INCIDENT.center,
+    WIND_DIR_DEG[WILDFIRE_INCIDENT.wind.direction] ?? 315,
+    WILDFIRE_INCIDENT.wind.speed,
+    1500, // current perimeter radius (m)
+    900   // burn scar radius (m) — smaller inner core
+  );
+}
 
 export type ViewLevel = "national" | "province" | "incident";
 export type ResourceType = "ground-crew" | "planned-burn" | "dozer-line";
@@ -60,6 +86,17 @@ interface WildfireState {
 
   isAiSidebarOpen: boolean;
   toggleAiSidebar: () => void;
+
+  fireSnapshot: FireSnapshot;
+  tickFireSimulation: () => void;
+  resetFireSimulation: () => void;
+
+  // Backend-sourced data
+  chokePoints: Waypoint[];
+  backendStatus: "idle" | "loading" | "loaded" | "error";
+  fetchBackendData: () => Promise<void>;
+  // Expose real weather for UI display
+  realWeather: { windDirDeg: number; windSpeedKph: number; tempC: number; rhPct: number } | null;
 }
 
 export const useWildfireStore = create<WildfireState>((set) => ({
@@ -138,8 +175,66 @@ export const useWildfireStore = create<WildfireState>((set) => ({
       selectedResourceId: null,
       placementMousePos: null,
       plannedBurnPoints: [],
+      fireSnapshot: makeInitialSnapshot(),
     }),
 
   isAiSidebarOpen: true,
   toggleAiSidebar: () => set((s) => ({ isAiSidebarOpen: !s.isAiSidebarOpen })),
+
+  fireSnapshot: makeInitialSnapshot(),
+  tickFireSimulation: () =>
+    set((s) => ({
+      fireSnapshot: tickSnapshot(s.fireSnapshot, WILDFIRE_INCIDENT.center),
+    })),
+  resetFireSimulation: () => set({ fireSnapshot: makeInitialSnapshot() }),
+
+  chokePoints: [],
+  backendStatus: "idle",
+  realWeather: null,
+  fetchBackendData: async () => {
+    set({ backendStatus: "loading" });
+    // center is [lng, lat] (GeoJSON order) — must destructure correctly
+    const [lon, lat] = WILDFIRE_INCIDENT.center;
+    const areaHa = WILDFIRE_INCIDENT.size;
+
+    try {
+      // 1. Get XGBoost spread prediction + live weather in one call
+      const spread = await fetchLiveSpreadPrediction(lat, lon, areaHa);
+
+      if (spread) {
+        const windDir = spread.features_used?.wind_direction_deg ?? WIND_DIR_DEG[WILDFIRE_INCIDENT.wind.direction] ?? 315;
+        const windSpeed = spread.features_used?.wind_speed_km_h ?? WILDFIRE_INCIDENT.wind.speed;
+
+        // Update fire simulator: real wind + real XGBoost forecast radii
+        set((s) => ({
+          fireSnapshot: updateSnapshotWithRealData(
+            s.fireSnapshot,
+            WILDFIRE_INCIDENT.center,
+            windDir,
+            windSpeed,
+            spread.spread_1h_m,
+            spread.spread_3h_m
+          ),
+          realWeather: {
+            windDirDeg: windDir,
+            windSpeedKph: windSpeed,
+            tempC: spread.features_used?.temperature_c ?? 0,
+            rhPct: spread.features_used?.relative_humidity_pct ?? 0,
+          },
+        }));
+
+        // 2. Get PPO tactical waypoints using the real spread radii
+        const choke = await fetchLiveChokePoints(lat, lon, spread.spread_1h_m, spread.spread_3h_m);
+        if (choke) {
+          set({ chokePoints: choke.waypoints, backendStatus: "loaded" });
+        } else {
+          set({ backendStatus: "loaded" });
+        }
+      } else {
+        set({ backendStatus: "error" });
+      }
+    } catch {
+      set({ backendStatus: "error" });
+    }
+  },
 }));
