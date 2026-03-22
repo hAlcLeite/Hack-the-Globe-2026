@@ -6,6 +6,7 @@ import {
   FIRST_RESPONDERS,
   ACTION_ASSETS,
 } from "@/data/fake-wildfire";
+import { fetchFires, type FireEvent } from "@/lib/api";
 
 export type ViewLevel = "national" | "province" | "incident";
 export type ResourceType = "ground-crew" | "air-tanker" | "helicopter" | "heavy-equipment";
@@ -36,6 +37,14 @@ interface WildfireState {
 
   viewport: Viewport;
   setViewport: (vp: Viewport) => void;
+
+  // ── Live fire data from backend ──────────────────────────────────────────
+  fires: FireEvent[];
+  firesLoading: boolean;
+  firesError: string | null;
+  fetchFires: () => Promise<void>;
+  selectedFireId: string | null;
+  setSelectedFireId: (id: string | null) => void;
 
   firstResponders: Resource[];
   actionAssets: Resource[];
@@ -71,6 +80,22 @@ export const useWildfireStore = create<WildfireState>((set) => ({
 
   viewport: CANADA_VIEW,
   setViewport: (vp) => set({ viewport: vp }),
+
+  // ── Fire data ─────────────────────────────────────────────────────────────
+  fires: [],
+  firesLoading: false,
+  firesError: null,
+  selectedFireId: null,
+  setSelectedFireId: (id) => set({ selectedFireId: id }),
+  fetchFires: async () => {
+    set({ firesLoading: true, firesError: null });
+    try {
+      const fires = await fetchFires();
+      set({ fires, firesLoading: false });
+    } catch {
+      set({ firesError: "Failed to load fire data", firesLoading: false });
+    }
+  },
 
   firstResponders: FIRST_RESPONDERS.map((r) => ({ ...r })) as Resource[],
   actionAssets: ACTION_ASSETS.map((r) => ({ ...r })) as Resource[],

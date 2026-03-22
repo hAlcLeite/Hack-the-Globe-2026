@@ -17,6 +17,7 @@ import type { Resource } from "@/stores/wildfire-store";
 import { WILDFIRE_INCIDENT } from "@/data/fake-wildfire";
 import { CANADA_OUTLINE_GEOJSON } from "@/data/canada-geojson";
 import { cn } from "@/lib/utils";
+import type { FireEvent } from "@/lib/api";
 
 // Free tile styles — no API key required
 const DARK_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
@@ -175,7 +176,15 @@ export function WildfireMap() {
     firstResponders,
     actionAssets,
     submitted,
+    fires,
+    firesLoading,
+    fetchFires: loadFires,
   } = useWildfireStore();
+
+  // Fetch fires from backend on mount
+  useEffect(() => {
+    loadFires();
+  }, [loadFires]);
 
   const allResources = [...firstResponders, ...actionAssets];
   const deployedResources = allResources.filter((r) => r.deployedPosition);
@@ -376,19 +385,41 @@ export function WildfireMap() {
           </>
         )}
 
-        {/* Fire dot marker — national & province views */}
+        {/* Fire dot markers — national & province views — one per fire from API */}
         {(viewLevel === "national" || viewLevel === "province") && (
-          <Marker longitude={FIRE_CENTER[0]} latitude={FIRE_CENTER[1]} anchor="center">
-            <div
-              className="cursor-pointer"
-              onClick={() => {
-                if (viewLevel === "national") setViewLevel("province");
-                else if (viewLevel === "province") setViewLevel("incident");
-              }}
-            >
-              <FireDot size={viewLevel === "province" ? "lg" : "sm"} />
-            </div>
-          </Marker>
+          <>
+            {/* Backend fires from DynamoDB */}
+            {!firesLoading && fires.map((fire: FireEvent) => {
+              const isOkanagan = fire.fire_id === "BC-2026-001";
+              return (
+                <Marker
+                  key={fire.fire_id}
+                  longitude={fire.longitude}
+                  latitude={fire.latitude}
+                  anchor="center"
+                >
+                  <div
+                    className="cursor-pointer"
+                    title={`${fire.name} — ${fire.area_hectares?.toLocaleString() ?? "?"} ha`}
+                    onClick={() => {
+                      if (viewLevel === "national" && isOkanagan) setViewLevel("province");
+                      else if (viewLevel === "province" && isOkanagan) setViewLevel("incident");
+                      else if (mapRef.current && viewLevel === "national") {
+                        mapRef.current.flyTo({
+                          center: [fire.longitude, fire.latitude],
+                          zoom: 8.5,
+                          pitch: 35,
+                          duration: 2000,
+                        });
+                      }
+                    }}
+                  >
+                    <FireDot size={viewLevel === "province" && isOkanagan ? "lg" : "sm"} />
+                  </div>
+                </Marker>
+              );
+            })}
+          </>
         )}
 
         {/* Incident view: fire center icon */}
