@@ -1,67 +1,106 @@
-# CanopyOS Backend — To-Do List
+# CanopyOS — Project To-Do
 
-## Phase 1: Skeleton + Dummy Data ✅
-- [x] Set up `pyproject.toml` with `uv`
-- [x] Scaffold `backend/src/` directory structure
-  - [x] `main.py` — FastAPI app entry point
-  - [x] `core/config.py` — environment variable loader
-  - [x] `api/fires.py` — fire incident routes
-  - [x] `api/predictions.py` — burn probability map routes
-  - [x] `api/assets.py` — first-responder asset routes
-  - [x] `api/choke_points.py` — RL choke point recommendation routes
-  - [x] `ingestion/dummy.py` — dummy data generators for all above
+## ✅ Phase 1: Skeleton + Dummy Data
+- [x] FastAPI app scaffold (`main.py`, routers, config)
+- [x] All 4 API endpoints with dummy data (fires, predictions, assets, choke_points)
+- [x] DynamoDB integration (`core/db.py` — read + write helpers)
+- [x] Seed script (`core/seed_db.py`) — 4 demo fires seeded live to AWS
 
-## Phase 2: Real Data Ingestion
-- [x] **NASA FIRMS ingestion** (`ingestion/firms.py`)
-  - [x] Sign up for free API key at https://firms.modaps.eosdis.nasa.gov/api/area/
-  - [x] Pull MODIS/VIIRS active fire hotspots for Canada (bounding box)
-  - [x] Normalize to `FireEvent` schema
-- [ ] **CWFIS/NRCan ingestion** (`ingestion/cwfis.py`)
-  - Pull national active fire perimeters (GeoJSON, no auth needed)
-  - Pull CFFDRS fire danger indices (FWI, ISI, BUI)
-- [ ] **BC Wildfire Service ingestion** (`ingestion/bcws.py`)
-  - Pull ArcGIS REST endpoints for active BC fire polygons
-  - Normalize to `FireEvent` schema
-- [ ] **Alberta Wildfire ingestion** (`ingestion/ab_wildfire.py`)
-  - Pull ArcGIS REST endpoints for Alberta fire polygons
-- [ ] **ECCC Datamart ingestion** (`ingestion/eccc.py`)
-  - Pull HRDPS wind vectors (speed + direction) for fire zones
-  - Pull temperature and humidity for CFFDRS index calculation
-- [x] **DynamoDB integration** (`core/db.py`)
-  - [x] Set up `boto3` client with environment credentials
-  - [x] Write helpers: `put_fire_event` — seeded 3 fires live ✅
-  - [x] Read helpers: `get_fire_event`, `get_all_fire_events`
-  - [x] `GET /api/v1/fires` and `GET /api/v1/fires/{fire_id}` read from DynamoDB
+## ✅ Phase 2: Real Data Ingestion
+- [x] **NASA FIRMS** (`ingestion/firms.py`) — VIIRS satellite hotspots, BC + AB bounding box
+- [x] **CWFIS Active Fires** (`ingestion/cwfis.py`) — NRCan official fire registry CSV, no auth
+- [x] **Open-Meteo Weather** (`ingestion/weather.py`) — wind, temp, humidity, dew point per fire
+- [x] **CFFDRS Indices** (`ingestion/cffdrs.py`) — FWI, ISI, BUI, DC, DMC, FFMC from NRCan stations
+  - ⚠️ March = off-season, stations report no FWI. Fix: use synthetic fallback for hackathon demo
+- [x] `GET /api/v1/fires/live` → real-time NASA FIRMS data
+- [x] Frontend wired to backend — map renders all 4 DynamoDB fires as live markers
 
-## Phase 3: ML Models
-- [ ] **XGBoost Spread Model** (`models/spread_model.py`)
-  - Define feature vector: `[wind_speed, wind_dir, humidity, temp, FWI, ISI, BUI, slope, fuel_type]`
-  - Train on historical CWFIS spread data OR use pre-trained weights
-  - Expose `predict_spread(fire_id) -> BurnProbabilityGrid` function
-  - Wire into `GET /api/v1/predictions/{fire_id}`
+## 🔲 Phase 3: ML Models (MVP for Demo)
 
-- [ ] **RL Tactical Agent — MVP Greedy Heuristic** (`models/rl_agent.py`)
-  - Score candidate choke points: `burn_probability × perimeter_vulnerability × accessibility`
-  - Rank top N choke points per available asset type (crews, dozers, aircraft)
-  - Expose `recommend_deployment(fire_id, assets) -> List[ChokepointRecommendation]`
-  - Wire into `GET /api/v1/choke_points/{fire_id}`
+### Goal
+A working, liveable demo for judges. Accuracy is not the priority — **speed and visual output are**.
 
-- [ ] **RL Tactical Agent — V2 DRL** (stretch goal)
-  - Set up `ray[rllib]` training environment simulating fire spread + asset constraints
-  - Train policy and export trained weights
-  - Replace greedy heuristic with policy inference
+### 3a — XGBoost Spread Model (`models/spread_model.py`)
+**What it does:** Given a fire's current state and weather, predicts how far the fire will spread (in metres) in the next 1h and 3h.
 
-## Phase 4: API Hardening + Testing
-- [ ] Add FastAPI background task scheduler (poll ingestion every 5 min)
-- [ ] Add Pydantic response validation to all endpoints
-- [ ] Write `pytest` tests for all ingestion normalizers (`tests/`)
-- [ ] Add `/health` endpoint and basic error handling middleware
-- [ ] Set up CORS middleware for frontend integration
-- [ ] Containerize with `Dockerfile` (stretch goal)
+**Feature vector (input to model):**
+| Feature | Source | Notes |
+|---|---|---|
+| `wind_speed_km_h` | Open-Meteo | Key spread driver |
+| `wind_direction_deg` | Open-Meteo | Determines direction |
+| `temperature_c` | Open-Meteo | Fuel dryness proxy |
+| `relative_humidity_pct` | Open-Meteo | Inversely correlates to spread |
+| `fwi` | CWFIS/CFFDRS | Overall fire danger (0–100+) |
+| `isi` | CWFIS/CFFDRS | Rate of spread index |
+| `bui` | CWFIS/CFFDRS | Available fuel index |
+| `area_hectares` | DynamoDB | Current fire size |
 
-## Environment Variables Needed (`.env`)
-- [ ] `NASA_FIRMS_API_KEY` — from https://firms.modaps.eosdis.nasa.gov
-- [x] `AWS_ACCESS_KEY_ID` — configured ✅
-- [x] `AWS_SECRET_ACCESS_KEY` — configured ✅
-- [x] `AWS_REGION` — `ca-central-1` ✅
-- [x] `DYNAMODB_TABLE_NAME` — `canopy-os-events` ✅
+**Label (what we predict):**
+- `spread_radius_1h_m` — estimated spread in metres over 1 hour
+- `spread_radius_3h_m` — estimated spread in metres over 3 hours
+
+**Training data strategy (hackathon POC):**
+- We will NOT use real historical spread data (requires years of CWFIS archives)
+- Instead: generate a **physics-informed synthetic dataset** of ~5000 samples using the Rothermel fire spread formula: `spread_rate ∝ ISI × wind_factor / RH`
+- Add noise + realistic ranges from CWFIS historical averages
+- Train a lightweight `XGBRegressor` on this synthetic dataset
+- This gives us a model that behaves realistically and produces live visual output
+
+**Output:** Two floats — 1h radius and 3h radius in metres. These feed the map's fire spread rings.
+
+**Wire-in:** `GET /api/v1/predictions/{fire_id}` calls this model with live weather fetched from Open-Meteo.
+
+**Status:** `[ ]` Not started
+
+---
+
+### 3b — RL Tactical Agent / Greedy Heuristic (`models/rl_agent.py`)
+**What it does:** Given a fire + its spread prediction, score candidate choke points and recommend the best positions for each asset type (crews, dozers, aircraft).
+
+**For the hackathon demo:** Use a **greedy scoring heuristic** (not full DRL training):
+```
+score(point) = burn_probability × perimeter_vulnerability × road_accessibility
+```
+
+- `burn_probability` comes from the XGBoost prediction grid
+- `perimeter_vulnerability` is the un-contained arc length (simple geometry from fire radius)
+- `road_accessibility` is a static score (1.0 for within 5km of highway, 0.5 otherwise)
+
+**Output:** Ranked list of `[lat, lon, score, recommended_asset_type, rationale]`
+
+**Wire-in:** `GET /api/v1/choke_points/{fire_id}` returns the top 5 choke points.
+
+**Status:** `[ ]` Not started
+
+---
+
+### 3c — Immediate Next Steps
+- [ ] Fix CFFDRS synthetic fallback so feature vector is never missing/NaN
+- [ ] Write `models/spread_model.py` with synthetic training + XGBoost fit
+- [ ] Add `predict_spread(fire_id)` function that:
+  1. Fetches weather from Open-Meteo
+  2. Fetches CFFDRS indices (or synthetic fallback)
+  3. Runs XGBoost prediction
+  4. Returns spread radii
+- [ ] Wire into `GET /api/v1/predictions/{fire_id}`
+- [ ] Wire predictions into frontend map's spread rings (currently hardcoded)
+- [ ] Write `models/rl_agent.py` with greedy heuristic
+- [ ] Wire into `GET /api/v1/choke_points/{fire_id}`
+
+## 🔲 Phase 4: Polish for Demo Day
+- [ ] `npm install` + verify frontend renders 4 fire markers on map
+- [ ] Re-seed DynamoDB (`uv run python -m src.core.seed_db`) to push BC-2026-003 demo fire
+- [ ] Live demo flow:
+  1. Start at national view → 4 pulsing fire dots on map
+  2. Click Okanagan Ridge → province view → incident card
+  3. Open Mission Control → show spread rings driven by ML model
+  4. Show AI choke point recommendations
+  5. Deploy assets to map positions
+  6. Submit mission → show success overlay
+- [ ] Commit all changes to `frontend_integration` branch + open PR to `main`
+
+## Environment Variables
+- [x] `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` + `AWS_REGION` — configured
+- [x] `DYNAMODB_TABLE_NAME=canopy-os-events`
+- [x] `NASA_FIRMS_API_KEY` — configured
+- [ ] `USE_DUMMY_DATA=False` — confirm set in `.env`
