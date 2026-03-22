@@ -1,36 +1,48 @@
 "use client";
 
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import Map, {
-  NavigationControl,
   Source,
   Layer,
   Marker,
   type MapRef,
   type MapMouseEvent,
   type ViewStateChangeEvent,
-} from "react-map-gl/maplibre";
+} from "react-map-gl/mapbox";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, ChevronRight, Flame, ZoomIn } from "lucide-react";
 import { useWildfireStore } from "@/stores/wildfire-store";
 import type { Resource } from "@/stores/wildfire-store";
-import { WILDFIRE_INCIDENT } from "@/data/fake-wildfire";
-import { CANADA_OUTLINE_GEOJSON } from "@/data/canada-geojson";
+import { WILDFIRE_INCIDENT, FIREBREAK_ROAD_GEOJSON } from "@/data/fake-wildfire";
+import { CANADA_PROVINCE_LABELS_GEOJSON } from "@/data/canada-provinces";
 import { cn } from "@/lib/utils";
-import type { FireEvent } from "@/lib/api";
 
-// Free tile styles — no API key required
-const DARK_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-const SATELLITE_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-// Note: CARTO doesn't provide satellite tiles; we use dark style throughout
-// and switch pitch/zoom for the "terrain feel". This keeps everything free.
+const DARK_STYLE = "mapbox://styles/mapbox/dark-v11";
+const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-streets-v12";
+const CANADA_MAX_BOUNDS = [
+  [-145, 40],
+  [-48, 84],
+] as [[number, number], [number, number]];
 
-// Create a circle GeoJSON polygon (from cision, adapted)
+const ARCGIS_PROVINCES_URL =
+  "https://services.arcgis.com/zmLUiqh7X11gGV2d/arcgis/rest/services/Canada_Provinical_boundaries_generalized/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson";
+
+function haversineKm(a: [number, number], b: [number, number]): number {
+  const R = 6371;
+  const dLat = ((b[1] - a[1]) * Math.PI) / 180;
+  const dLon = ((b[0] - a[0]) * Math.PI) / 180;
+  const lat1 = (a[1] * Math.PI) / 180;
+  const lat2 = (b[1] * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
 function createCircleGeoJSON(center: [number, number], radiusMeters: number, points = 64) {
   const [lng, lat] = center;
   const pts: [number, number][] = [];
   const R = 6371000;
-
   for (let i = 0; i < points; i++) {
     const angle = (i * 360) / points;
     const bearing = (angle * Math.PI) / 180;
@@ -64,29 +76,27 @@ function createCircleGeoJSON(center: [number, number], radiusMeters: number, poi
 const FIRE_CENTER = WILDFIRE_INCIDENT.center;
 const FIRE_SPREAD = WILDFIRE_INCIDENT.spread;
 
-// Resource marker
-function ResourceMarker({
-  resource,
-  onClick,
-}: {
-  resource: Resource;
-  onClick: () => void;
-}) {
-  const isResponder = resource.type === "ground-crew";
+const RESOURCE_EMOJI: Record<string, string> = {
+  "ground-crew": "👥",
+  "planned-burn": "🔥",
+  "dozer-line": "🚜",
+};
+
+function ResourceMarker({ resource }: { resource: Resource }) {
+  const emoji = RESOURCE_EMOJI[resource.type] ?? "📍";
+  const isGround = resource.type === "ground-crew";
+
   return (
-    <div
-      className="resource-marker flex flex-col items-center cursor-pointer group"
-      onClick={onClick}
-    >
+    <div className="resource-marker flex flex-col items-center cursor-default group">
       <div
         className={cn(
-          "h-8 w-8 border-2 flex items-center justify-center text-white font-bold text-[10px] shadow-lg",
-          isResponder
-            ? "bg-yellow-600 border-yellow-400"
-            : "bg-orange-700 border-orange-400"
+          "h-9 w-9 border-2 flex items-center justify-center text-base shadow-lg",
+          isGround
+            ? "bg-yellow-900/80 border-yellow-500"
+            : "bg-orange-900/80 border-orange-500"
         )}
       >
-        {isResponder ? "👥" : "✈"}
+        {emoji}
       </div>
       <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1 bg-zinc-900/95 border border-zinc-700 px-2 py-1 text-[9px] text-white whitespace-nowrap pointer-events-none">
         {resource.name}
@@ -95,46 +105,47 @@ function ResourceMarker({
   );
 }
 
-// Pulsing fire dot for national / province views
-function FireDot({ size = "sm" }: { size?: "sm" | "lg" }) {
-  const s = size === "lg" ? 24 : 14;
-  const ring = size === "lg" ? 48 : 28;
+function PlacementIndicator({ resource }: { resource: Resource }) {
+  const emoji = RESOURCE_EMOJI[resource.type] ?? "📍";
   return (
-    <div className="relative flex items-center justify-center" style={{ width: ring, height: ring }}>
-      <div
-        className="absolute rounded-full bg-red-500 opacity-40 fire-ring"
-        style={{ width: ring, height: ring }}
-      />
-      <div
-        className="absolute rounded-full bg-red-500 opacity-25 fire-ring"
-        style={{ width: ring * 1.3, height: ring * 1.3, animationDelay: "0.5s" }}
-      />
-      <div
-        className="relative rounded-full bg-red-600 border-2 border-red-300 shadow-lg shadow-red-500/50 fire-dot"
-        style={{ width: s, height: s }}
-      />
+    <div className="flex flex-col items-center pointer-events-none">
+      <div className="h-9 w-9 border-2 border-blue-400 border-dashed bg-blue-900/60 flex items-center justify-center text-base opacity-80 animate-pulse">
+        {emoji}
+      </div>
+      <div className="mt-1 bg-blue-950/90 border border-blue-500/50 px-2 py-1 text-[9px] text-blue-300 whitespace-nowrap">
+        {resource.name}
+      </div>
     </div>
   );
 }
 
-// Province-level warning card shown on map
+function FireDot({ size = "sm" }: { size?: "sm" | "lg" }) {
+  const s = size === "lg" ? 24 : 14;
+  const ring = size === "lg" ? 50 : 30;
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: ring, height: ring }}>
+      <div className="absolute rounded-full bg-red-500 opacity-40 fire-ring" style={{ width: ring, height: ring }} />
+      <div className="absolute rounded-full bg-red-500 opacity-20 fire-ring" style={{ width: ring * 1.4, height: ring * 1.4, animationDelay: "0.6s" }} />
+      <div className="relative rounded-full bg-red-600 border-2 border-red-300 shadow-lg shadow-red-500/50 fire-dot" style={{ width: s, height: s }} />
+    </div>
+  );
+}
+
 function IncidentWarningCard({ onClick }: { onClick: () => void }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: -10, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -10, scale: 0.95 }}
-      transition={{ duration: 0.3 }}
-      className="bg-zinc-950/95 border border-red-500/60 backdrop-blur-sm shadow-xl shadow-red-900/30 pointer-events-auto"
-      style={{ minWidth: 220 }}
+      className="bg-zinc-950/96 border border-red-500/60 backdrop-blur-sm shadow-xl"
+      style={{ minWidth: 210 }}
     >
-      <div className="border-b border-red-500/40 px-3 py-2 flex items-center gap-2 bg-red-950/30">
-        <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
-        <span className="text-[10px] text-red-400 font-semibold uppercase tracking-widest">Active Wildfire</span>
+      <div className="border-b border-red-500/40 px-3 py-1.5 flex items-center gap-2 bg-red-950/30">
+        <AlertTriangle className="h-3 w-3 text-red-400 shrink-0" />
+        <span className="text-[9px] text-red-400 font-semibold uppercase tracking-widest">Active Wildfire</span>
         <span className="ml-auto h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
       </div>
-      <div className="px-3 py-2.5">
-        <div className="text-sm font-semibold text-white mb-1">{WILDFIRE_INCIDENT.name}</div>
+      <div className="px-3 py-2">
         <div className="text-[10px] text-zinc-400 space-y-0.5">
           <div className="flex justify-between">
             <span>Status</span>
@@ -151,7 +162,7 @@ function IncidentWarningCard({ onClick }: { onClick: () => void }) {
         </div>
         <button
           onClick={onClick}
-          className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 bg-red-600 hover:bg-red-500 transition-colors text-[10px] font-semibold uppercase tracking-widest text-white"
+          className="mt-2.5 w-full flex items-center justify-center gap-1 py-1.5 bg-red-600 hover:bg-red-500 transition-colors text-[10px] font-semibold uppercase tracking-widest text-white"
         >
           <ZoomIn className="h-3 w-3" />
           Open Mission Control
@@ -166,6 +177,8 @@ export function WildfireMap() {
   const mapRef = useRef<MapRef>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [showWarningCard, setShowWarningCard] = useState(false);
+  const [measureMode, setMeasureMode] = useState(false);
+  const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
 
   const {
     viewLevel,
@@ -173,269 +186,422 @@ export function WildfireMap() {
     setViewport,
     selectedResourceId,
     deployResource,
-    firstResponders,
-    actionAssets,
-    submitted,
-    fires,
-    firesLoading,
-    fetchFires: loadFires,
+    setPlacementMousePos,
+    placementMousePos,
+    groundCrews,
+    fireActions,
+    plannedBurnPoints,
+    addPlannedBurnPoint,
   } = useWildfireStore();
 
-  // Fetch fires from backend on mount
-  useEffect(() => {
-    loadFires();
-  }, [loadFires]);
-
-  const allResources = [...firstResponders, ...actionAssets];
+  const allResources = [...groundCrews, ...fireActions];
   const deployedResources = allResources.filter((r) => r.deployedPosition);
+  const selectedResource = selectedResourceId
+    ? allResources.find((r) => r.id === selectedResourceId) ?? null
+    : null;
 
-  // Fly to the correct location whenever viewLevel changes
   useEffect(() => {
     if (!mapRef.current || !mapLoaded) return;
     const map = mapRef.current;
 
     if (viewLevel === "national") {
-      map.flyTo({
-        center: [-96.0, 60.0],
-        zoom: 3.2,
-        pitch: 0,
-        bearing: 0,
-        duration: 2000,
-      });
+      map.flyTo({ center: [-96.0, 60.0], zoom: 3.2, pitch: 0, bearing: 0, duration: 2000 });
       setShowWarningCard(false);
     } else if (viewLevel === "province") {
-      map.flyTo({
-        center: FIRE_CENTER,
-        zoom: 8.5,
-        pitch: 40,
-        bearing: -10,
-        duration: 2200,
-      });
+      map.flyTo({ center: FIRE_CENTER, zoom: 8.5, pitch: 40, bearing: -10, duration: 2200 });
       setTimeout(() => setShowWarningCard(true), 2500);
     } else if (viewLevel === "incident") {
       setShowWarningCard(false);
-      map.flyTo({
-        center: FIRE_CENTER,
-        zoom: 11.5,
-        pitch: 55,
-        bearing: -20,
-        duration: 2500,
-      });
+      map.flyTo({ center: FIRE_CENTER, zoom: 13, pitch: 60, bearing: -20, duration: 2500 });
     }
   }, [viewLevel, mapLoaded]);
 
+  // [M] hotkey toggles measure mode
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === "m" || e.key === "M") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        setMeasureMode((prev) => !prev);
+        setMeasurePoints([]);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const measureDistance =
+    measurePoints.length === 2
+      ? haversineKm(measurePoints[0], measurePoints[1])
+      : null;
+
   const handleMapClick = useCallback(
     (event: MapMouseEvent) => {
-      // Place selected resource at click position
+      if (measureMode) {
+        const pt: [number, number] = [event.lngLat.lng, event.lngLat.lat];
+        setMeasurePoints((prev) => (prev.length >= 2 ? [pt] : [...prev, pt]));
+        return;
+      }
       if (selectedResourceId && viewLevel === "incident") {
+        if (selectedResource?.type === "planned-burn") {
+          if (plannedBurnPoints.length === 0) {
+            addPlannedBurnPoint([event.lngLat.lng, event.lngLat.lat]);
+          } else if (plannedBurnPoints.length === 1) {
+            addPlannedBurnPoint([event.lngLat.lng, event.lngLat.lat]);
+            deployResource(selectedResourceId, [event.lngLat.lng, event.lngLat.lat]);
+          }
+          return;
+        }
         deployResource(selectedResourceId, [event.lngLat.lng, event.lngLat.lat]);
         return;
       }
-      // National: clicking near fire dot → province view
       if (viewLevel === "national") {
         const [fireLng, fireLat] = FIRE_CENTER;
         const dist = Math.sqrt(
-          Math.pow(event.lngLat.lng - fireLng, 2) +
-            Math.pow(event.lngLat.lat - fireLat, 2)
+          Math.pow(event.lngLat.lng - fireLng, 2) + Math.pow(event.lngLat.lat - fireLat, 2)
         );
         if (dist < 2.5) setViewLevel("province");
       }
     },
-    [selectedResourceId, viewLevel, deployResource, setViewLevel]
+    [measureMode, selectedResourceId, selectedResource, viewLevel, deployResource, setViewLevel, plannedBurnPoints, addPlannedBurnPoint]
   );
 
-  const handleMapLoad = useCallback(() => setMapLoaded(true), []);
+  const mouseRaf = useRef<number | null>(null);
+  const moveRaf = useRef<number | null>(null);
 
-  const cursorStyle = selectedResourceId ? "crosshair" : "grab";
+  const handleMouseMove = useCallback(
+    (event: MapMouseEvent) => {
+      if (!(selectedResourceId && viewLevel === "incident")) return;
+      if (mouseRaf.current) cancelAnimationFrame(mouseRaf.current);
+      const lng = event.lngLat.lng;
+      const lat = event.lngLat.lat;
+      mouseRaf.current = requestAnimationFrame(() => {
+        setPlacementMousePos({ lng, lat });
+      });
+    },
+    [selectedResourceId, viewLevel, setPlacementMousePos]
+  );
+
+  const handleMouseLeave = useCallback(() => {
+    setPlacementMousePos(null);
+  }, [setPlacementMousePos]);
+
+  useEffect(() => {
+    return () => {
+      if (mouseRaf.current) cancelAnimationFrame(mouseRaf.current);
+      if (moveRaf.current) cancelAnimationFrame(moveRaf.current);
+    };
+  }, []);
+
+  // Memoized GeoJSON — stable references prevent Mapbox from seeing new source data every render
+  const fireRing3h = useMemo(() => createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.threeHour), []);
+  const fireRing1h = useMemo(() => createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.oneHour), []);
+  const fireCurrent = useMemo(() => createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.current), []);
+
+  const burnLineGeoJSON = useMemo(() => {
+    if (plannedBurnPoints.length < 2) return null;
+    return {
+      type: "FeatureCollection" as const,
+      features: [{ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: plannedBurnPoints } }],
+    };
+  }, [plannedBurnPoints]);
+
+  const burnPreviewGeoJSON = useMemo(() => {
+    if (plannedBurnPoints.length !== 1 || !placementMousePos || selectedResource?.type !== "planned-burn") return null;
+    return {
+      type: "FeatureCollection" as const,
+      features: [{ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: [plannedBurnPoints[0], [placementMousePos.lng, placementMousePos.lat]] } }],
+    };
+  }, [plannedBurnPoints, placementMousePos, selectedResource?.type]);
+
+  const measureLineGeoJSON = useMemo(() => {
+    if (measurePoints.length !== 2) return null;
+    return {
+      type: "FeatureCollection" as const,
+      features: [{ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: measurePoints } }],
+    };
+  }, [measurePoints]);
 
   return (
-    <div className="relative w-full h-full" style={{ cursor: cursorStyle }}>
+    <div
+      className="relative w-full h-full"
+      style={{ cursor: measureMode ? "crosshair" : selectedResourceId ? "crosshair" : "grab" }}
+    >
       <Map
         ref={mapRef}
-        initialViewState={{
-          longitude: -96.0,
-          latitude: 60.0,
-          zoom: 3.2,
-          pitch: 0,
-          bearing: 0,
+        mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
+        initialViewState={{ longitude: -96.0, latitude: 60.0, zoom: 3.2, pitch: 0, bearing: 0 }}
+        onMove={(evt: ViewStateChangeEvent) => {
+          if (moveRaf.current) cancelAnimationFrame(moveRaf.current);
+          const vs = evt.viewState;
+          moveRaf.current = requestAnimationFrame(() =>
+            setViewport({ longitude: vs.longitude, latitude: vs.latitude, zoom: vs.zoom, pitch: vs.pitch, bearing: vs.bearing })
+          );
         }}
-        onMove={(evt: ViewStateChangeEvent) =>
-          setViewport({
-            longitude: evt.viewState.longitude,
-            latitude: evt.viewState.latitude,
-            zoom: evt.viewState.zoom,
-            pitch: evt.viewState.pitch,
-            bearing: evt.viewState.bearing,
-          })
-        }
         onClick={handleMapClick}
-        onLoad={handleMapLoad}
-        mapStyle={DARK_STYLE}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        onLoad={() => {
+          setMapLoaded(true);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mb = (mapRef.current as any)?.getMap();
+          if (!mb) return;
+
+          mb.setProjection({ name: "globe" });
+          mb.setFog({
+            color: "rgb(180, 210, 240)",
+            "high-color": "rgb(30, 80, 200)",
+            "horizon-blend": 0.04,
+            "space-color": "rgb(6, 8, 20)",
+            "star-intensity": 0.5,
+          });
+
+          // Re-add terrain DEM after every style switch (style.load clears raw API additions)
+          const applyTerrain = () => {
+            if (!mb.getSource("mapbox-dem")) {
+              mb.addSource("mapbox-dem", {
+                type: "raster-dem",
+                url: "mapbox://mapbox.mapbox-terrain-dem-v1",
+                tileSize: 512,
+                maxzoom: 14,
+              });
+            }
+            mb.setTerrain({ source: "mapbox-dem", exaggeration: 1.4 });
+          };
+
+          mb.on("style.load", applyTerrain);
+          applyTerrain();
+        }}
+        mapStyle={viewLevel === "national" ? DARK_STYLE : SATELLITE_STYLE}
+        maxBounds={CANADA_MAX_BOUNDS}
         style={{ width: "100%", height: "100%" }}
         antialias={true}
+        attributionControl={false}
       >
-        <NavigationControl position="bottom-right" />
+        {mapLoaded && viewLevel !== "national" && (
+          <Layer
+            id="3d-buildings"
+            source="composite"
+            source-layer="building"
+            filter={["==", "extrude", "true"]}
+            type="fill-extrusion"
+            minzoom={14}
+            paint={{
+              "fill-extrusion-color": [
+                "interpolate",
+                ["linear"],
+                ["get", "height"],
+                0,  "#4b5563",
+                20, "#6b7280",
+                50, "#9ca3af",
+                100,"#d1d5db",
+              ],
+              "fill-extrusion-height": ["get", "height"],
+              "fill-extrusion-base": ["get", "min_height"],
+              "fill-extrusion-opacity": 0.85,
+              "fill-extrusion-vertical-gradient": true,
+              "fill-extrusion-ambient-occlusion-intensity": 0.4,
+              "fill-extrusion-ambient-occlusion-radius": 3,
+            }}
+          />
+        )}
 
-        {/* Canada outline — national view */}
-        {mapLoaded && (
-          <Source id="canada-outline" type="geojson" data={CANADA_OUTLINE_GEOJSON}>
-            {/* Blue fill */}
+        {mapLoaded && viewLevel !== "incident" && (
+          <>
+            <Source id="arcgis-provinces" type="geojson" data={ARCGIS_PROVINCES_URL}>
+              <Layer
+                id="canada-outline-glow"
+                type="line"
+                layout={{ "line-cap": "round", "line-join": "round" }}
+                paint={{
+                  "line-color": "#ffffff",
+                  "line-width": [
+                    "interpolate", ["linear"], ["zoom"],
+                    3, 4, 6, 6, 8, 10, 10, 14,
+                  ],
+                  "line-blur": [
+                    "interpolate", ["linear"], ["zoom"],
+                    3, 3, 6, 5, 8, 8, 10, 10,
+                  ],
+                  "line-opacity": 0.35,
+                }}
+              />
+              <Layer
+                id="canada-outline-main"
+                type="line"
+                layout={{ "line-cap": "round", "line-join": "round" }}
+                paint={{
+                  "line-color": "#ffffff",
+                  "line-width": [
+                    "interpolate", ["linear"], ["zoom"],
+                    3, 0.8, 6, 1.2, 8, 2, 10, 2.5,
+                  ],
+                  "line-opacity": 0.9,
+                }}
+              />
+            </Source>
+
+            <Source id="province-label-points" type="geojson" data={CANADA_PROVINCE_LABELS_GEOJSON}>
+              <Layer
+                id="province-labels"
+                type="symbol"
+                layout={{
+                  "symbol-placement": "point",
+                  "text-font": ["Open Sans SemiBold", "Arial Unicode MS Bold"],
+                  "text-size": [
+                    "interpolate", ["linear"], ["zoom"],
+                    3, 9, 5, 11, 8, 13, 10, 15,
+                  ],
+                  "text-letter-spacing": 0.06,
+                  "text-allow-overlap": false,
+                  "text-max-width": 8,
+                  "text-pitch-alignment": "viewport",
+                  "text-field": [
+                    "case",
+                    ["==", ["get", "name"], "British Columbia"],    "British Columbia",
+                    ["==", ["get", "name"], "Alberta"],              "Alberta",
+                    ["==", ["get", "name"], "Saskatchewan"],         "Saskatchewan",
+                    ["==", ["get", "name"], "Manitoba"],             "Manitoba",
+                    ["==", ["get", "name"], "Ontario"],              "Ontario",
+                    ["==", ["get", "name"], "Quebec"],               "Québec",
+                    ["==", ["get", "name"], "New Brunswick"],        "New Brunswick",
+                    ["==", ["get", "name"], "Nova Scotia"],          "Nova Scotia",
+                    ["==", ["get", "name"], "Prince Edward Island"], "Prince Edward Island",
+                    ["==", ["get", "name"], "Newfoundland and Labrador"], "Newfoundland & Labrador",
+                    ["==", ["get", "name"], "Yukon"],                "Yukon",
+                    ["==", ["get", "name"], "Northwest Territories"],"NW Territories",
+                    ["==", ["get", "name"], "Nunavut"],              "Nunavut",
+                    ["get", "name"]
+                  ],
+                }}
+                paint={{
+                  "text-color": "#dbeafe",
+                  "text-halo-color": "rgba(15, 23, 42, 0.95)",
+                  "text-halo-width": 1.5,
+                  "text-opacity": [
+                    "interpolate", ["linear"], ["zoom"],
+                    3, 0.5, 5, 0.8, 8, 1,
+                  ],
+                }}
+              />
+            </Source>
+          </>
+        )}
+
+        {measureLineGeoJSON && (
+          <Source id="measure-line" type="geojson" data={measureLineGeoJSON}>
             <Layer
-              id="canada-fill"
-              type="fill"
-              paint={{
-                "fill-color": "#1d4ed8",
-                "fill-opacity": viewLevel === "national" ? 0.06 : 0,
-              }}
-            />
-            {/* Outer glow */}
-            <Layer
-              id="canada-glow"
+              id="measure-line-layer"
               type="line"
               paint={{
-                "line-color": "#1d4ed8",
-                "line-width": viewLevel === "national" ? 10 : 0,
-                "line-blur": 8,
-                "line-opacity": 0.5,
-              }}
-            />
-            {/* Sharp inner line */}
-            <Layer
-              id="canada-line"
-              type="line"
-              paint={{
-                "line-color": "#3b82f6",
-                "line-width": viewLevel === "national" ? 1.5 : 0,
+                "line-color": "#facc15",
+                "line-width": 2,
+                "line-dasharray": [4, 3],
                 "line-opacity": 0.9,
               }}
             />
           </Source>
         )}
 
-        {/* Fire spread rings — incident view */}
+        {measurePoints.map((pt, i) => (
+          <Marker key={i} longitude={pt[0]} latitude={pt[1]} anchor="center">
+            <div className="h-3 w-3 rounded-full bg-yellow-400 border-2 border-yellow-200 shadow shadow-yellow-400/50" />
+          </Marker>
+        ))}
+
+        {mapLoaded && viewLevel === "incident" && (
+          <Source id="firebreak-road" type="geojson" data={FIREBREAK_ROAD_GEOJSON}>
+            <Layer
+              id="firebreak-road-glow"
+              type="line"
+              paint={{
+                "line-color": "#78716c",
+                "line-width": 6,
+                "line-blur": 4,
+                "line-opacity": 0.3,
+              }}
+            />
+            <Layer
+              id="firebreak-road-line"
+              type="line"
+              paint={{
+                "line-color": "#a8a29e",
+                "line-width": 1.5,
+                "line-dasharray": [5, 3],
+                "line-opacity": 0.6,
+              }}
+            />
+          </Source>
+        )}
+
         {viewLevel === "incident" && (
           <>
-            {/* 3-hour projection */}
-            <Source
-              id="fire-ring-3h"
-              type="geojson"
-              data={createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.threeHour)}
-            >
-              <Layer
-                id="fire-ring-3h-fill"
-                type="fill"
-                paint={{ "fill-color": "#d97706", "fill-opacity": 0.08 }}
-              />
-              <Layer
-                id="fire-ring-3h-line"
-                type="line"
-                paint={{
-                  "line-color": "#d97706",
-                  "line-width": 1.5,
-                  "line-dasharray": [4, 3],
-                  "line-opacity": 0.7,
-                }}
-              />
+            <Source id="fire-ring-3h" type="geojson" data={fireRing3h}>
+              <Layer id="fire-ring-3h-fill" type="fill" paint={{ "fill-color": "#d97706", "fill-opacity": 0.07 }} />
+              <Layer id="fire-ring-3h-line" type="line" paint={{ "line-color": "#d97706", "line-width": 1.5, "line-dasharray": [4, 3], "line-opacity": 0.7 }} />
             </Source>
-
-            {/* 1-hour projection */}
-            <Source
-              id="fire-ring-1h"
-              type="geojson"
-              data={createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.oneHour)}
-            >
-              <Layer
-                id="fire-ring-1h-fill"
-                type="fill"
-                paint={{ "fill-color": "#f97316", "fill-opacity": 0.12 }}
-              />
-              <Layer
-                id="fire-ring-1h-line"
-                type="line"
-                paint={{
-                  "line-color": "#f97316",
-                  "line-width": 2,
-                  "line-dasharray": [3, 2],
-                  "line-opacity": 0.85,
-                }}
-              />
+            <Source id="fire-ring-1h" type="geojson" data={fireRing1h}>
+              <Layer id="fire-ring-1h-fill" type="fill" paint={{ "fill-color": "#f97316", "fill-opacity": 0.11 }} />
+              <Layer id="fire-ring-1h-line" type="line" paint={{ "line-color": "#f97316", "line-width": 2, "line-dasharray": [3, 2], "line-opacity": 0.85 }} />
             </Source>
-
-            {/* Current fire perimeter */}
-            <Source
-              id="fire-current"
-              type="geojson"
-              data={createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.current)}
-            >
-              <Layer
-                id="fire-current-fill"
-                type="fill"
-                paint={{ "fill-color": "#ef4444", "fill-opacity": 0.22 }}
-              />
-              <Layer
-                id="fire-current-line"
-                type="line"
-                paint={{
-                  "line-color": "#ef4444",
-                  "line-width": 2.5,
-                  "line-opacity": 1,
-                }}
-              />
+            <Source id="fire-current" type="geojson" data={fireCurrent}>
+              <Layer id="fire-current-fill" type="fill" paint={{ "fill-color": "#ef4444", "fill-opacity": 0.22 }} />
+              <Layer id="fire-current-line" type="line" paint={{ "line-color": "#ef4444", "line-width": 2.5, "line-opacity": 1 }} />
             </Source>
           </>
         )}
 
-        {/* Fire dot markers — national & province views — one per fire from API */}
+        {viewLevel === "incident" && burnLineGeoJSON && (
+          <Source id="planned-burn-line" type="geojson" data={burnLineGeoJSON}>
+            <Layer
+              id="planned-burn-line-glow"
+              type="line"
+              paint={{ "line-color": "#f97316", "line-width": 8, "line-blur": 6, "line-opacity": 0.3 }}
+            />
+            <Layer
+              id="planned-burn-line-main"
+              type="line"
+              paint={{ "line-color": "#fb923c", "line-width": 3, "line-dasharray": [4, 2], "line-opacity": 0.95 }}
+            />
+          </Source>
+        )}
+
+        {viewLevel === "incident" && burnPreviewGeoJSON && (
+          <Source id="planned-burn-preview" type="geojson" data={burnPreviewGeoJSON}>
+            <Layer
+              id="planned-burn-preview-line"
+              type="line"
+              paint={{ "line-color": "#f97316", "line-width": 2, "line-dasharray": [3, 3], "line-opacity": 0.55 }}
+            />
+          </Source>
+        )}
+
+        {viewLevel === "incident" && plannedBurnPoints.length >= 1 && (
+          <Marker longitude={plannedBurnPoints[0][0]} latitude={plannedBurnPoints[0][1]} anchor="center">
+            <div className="h-3 w-3 rounded-full bg-orange-500 border-2 border-orange-300 shadow shadow-orange-500/50" />
+          </Marker>
+        )}
+
         {(viewLevel === "national" || viewLevel === "province") && (
-          <>
-            {/* Backend fires from DynamoDB */}
-            {!firesLoading && fires.map((fire: FireEvent) => {
-              const isOkanagan = fire.fire_id === "BC-2026-001";
-              return (
-                <Marker
-                  key={fire.fire_id}
-                  longitude={fire.longitude}
-                  latitude={fire.latitude}
-                  anchor="center"
-                >
-                  <div
-                    className="cursor-pointer"
-                    title={`${fire.name} — ${fire.area_hectares?.toLocaleString() ?? "?"} ha`}
-                    onClick={() => {
-                      if (viewLevel === "national" && isOkanagan) setViewLevel("province");
-                      else if (viewLevel === "province" && isOkanagan) setViewLevel("incident");
-                      else if (mapRef.current && viewLevel === "national") {
-                        mapRef.current.flyTo({
-                          center: [fire.longitude, fire.latitude],
-                          zoom: 8.5,
-                          pitch: 35,
-                          duration: 2000,
-                        });
-                      }
-                    }}
-                  >
-                    <FireDot size={viewLevel === "province" && isOkanagan ? "lg" : "sm"} />
-                  </div>
-                </Marker>
-              );
-            })}
-          </>
+          <Marker longitude={FIRE_CENTER[0]} latitude={FIRE_CENTER[1]} anchor="center">
+            <div
+              className="cursor-pointer"
+              onClick={() => {
+                if (viewLevel === "national") setViewLevel("province");
+                else setViewLevel("incident");
+              }}
+            >
+              <FireDot size={viewLevel === "province" ? "lg" : "sm"} />
+            </div>
+          </Marker>
         )}
 
-        {/* Incident view: fire center icon */}
         {viewLevel === "incident" && (
           <Marker longitude={FIRE_CENTER[0]} latitude={FIRE_CENTER[1]} anchor="center">
             <div className="h-5 w-5 rounded-full bg-red-600 border-2 border-red-300 shadow-lg shadow-red-500/60 fire-dot" />
           </Marker>
         )}
 
-        {/* Province view: warning card */}
         {viewLevel === "province" && (
-          <Marker
-            longitude={FIRE_CENTER[0]}
-            latitude={FIRE_CENTER[1] + 0.08}
-            anchor="bottom"
-          >
+          <Marker longitude={FIRE_CENTER[0]} latitude={FIRE_CENTER[1] + 0.08} anchor="bottom">
             <AnimatePresence>
               {showWarningCard && (
                 <IncidentWarningCard onClick={() => setViewLevel("incident")} />
@@ -444,100 +610,53 @@ export function WildfireMap() {
           </Marker>
         )}
 
-        {/* Deployed resource markers */}
         {viewLevel === "incident" &&
-          deployedResources.map((r) =>
-            r.deployedPosition ? (
-              <Marker
-                key={r.id}
-                longitude={r.deployedPosition[0]}
-                latitude={r.deployedPosition[1]}
-                anchor="bottom"
-              >
-                <ResourceMarker resource={r} onClick={() => {}} />
-              </Marker>
-            ) : null
+          deployedResources
+            .filter((r) => r.type !== "planned-burn")
+            .map((r) =>
+              r.deployedPosition ? (
+                <Marker key={r.id} longitude={r.deployedPosition[0]} latitude={r.deployedPosition[1]} anchor="bottom">
+                  <ResourceMarker resource={r} />
+                </Marker>
+              ) : null
+            )}
+
+        {viewLevel === "incident" &&
+          selectedResource &&
+          selectedResource.type !== "planned-burn" &&
+          placementMousePos && (
+            <Marker longitude={placementMousePos.lng} latitude={placementMousePos.lat} anchor="bottom">
+              <PlacementIndicator resource={selectedResource} />
+            </Marker>
           )}
       </Map>
 
-      {/* HUD: view level indicator */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-        <motion.div
-          key={viewLevel}
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="bg-zinc-950/80 border border-zinc-800 backdrop-blur-sm px-4 py-2 flex items-center gap-3"
-        >
-          <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-          <span className="text-[10px] text-zinc-400 uppercase tracking-widest">
-            {viewLevel === "national" && "Canada — National Overview"}
-            {viewLevel === "province" && "British Columbia — Okanagan Region"}
-            {viewLevel === "incident" && "Mission Control — Okanagan Ridge Fire"}
-          </span>
-          {viewLevel === "incident" && (
-            <span className="flex items-center gap-1 text-[10px] text-red-400">
-              <Flame className="h-3 w-3" />
-              Out of Control
-            </span>
-          )}
-        </motion.div>
-      </div>
-
-      {/* National view: click hint */}
-      {viewLevel === "national" && mapLoaded && (
-        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+      {viewLevel !== "national" && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.5, duration: 0.6 }}
-            className="bg-zinc-950/70 border border-zinc-800 backdrop-blur-sm px-3 py-1.5"
+            key={viewLevel}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="bg-zinc-950/80 border border-zinc-800 backdrop-blur-sm px-4 py-1.5 flex items-center gap-3"
           >
-            <span className="text-[10px] text-zinc-500">
-              Click the red marker in British Columbia to investigate
+            <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+            <span className="text-[10px] text-zinc-400 uppercase tracking-widest">
+              {viewLevel === "province" && "British Columbia — Cariboo Plateau Region"}
+              {viewLevel === "incident" && "Mission Control · BC Wildfire"}
             </span>
+            {viewLevel === "incident" && (
+              <span className="flex items-center gap-1 text-[10px] text-red-400">
+                <Flame className="h-3 w-3" />
+                Out of Control
+              </span>
+            )}
           </motion.div>
         </div>
       )}
 
-      {/* Placing resource hint */}
-      {selectedResourceId && viewLevel === "incident" && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-blue-950/90 border border-blue-500/60 backdrop-blur-sm px-4 py-2 flex items-center gap-2"
-          >
-            <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
-            <span className="text-[11px] text-blue-300 font-medium">
-              Click on the map to place unit
-            </span>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Submit success overlay */}
-      {submitted && viewLevel === "incident" && (
-        <div className="absolute top-16 right-4 z-20 pointer-events-none">
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="bg-green-950/90 border border-green-500/60 backdrop-blur-sm px-4 py-3 space-y-1"
-          >
-            <div className="text-[10px] text-green-400 font-semibold uppercase tracking-widest flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
-              Mission Deployed
-            </div>
-            <div className="text-[10px] text-zinc-400">
-              {deployedResources.length} unit{deployedResources.length > 1 ? "s" : ""} dispatched to field
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Fire spread legend */}
       {viewLevel === "incident" && (
-        <div className="absolute bottom-12 right-16 z-10 pointer-events-none">
+        <div className="absolute bottom-28 right-4 z-10 pointer-events-none">
           <div className="bg-zinc-950/80 border border-zinc-800 backdrop-blur-sm px-3 py-2 space-y-1.5">
             <div className="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">Fire Spread</div>
             {[
@@ -550,6 +669,25 @@ export function WildfireMap() {
                 <span className="text-[9px] text-zinc-400">{label}</span>
               </div>
             ))}
+            <div className="flex items-center gap-2 mt-1 pt-1 border-t border-zinc-800">
+              <div className="h-px w-4 border-t-2 border-dashed border-stone-400 opacity-60" />
+              <span className="text-[9px] text-zinc-500">Likely FSR firebreak</span>
+            </div>
+            <div className={cn(
+              "flex items-center gap-2 mt-1 pt-1 border-t border-zinc-800 pointer-events-auto cursor-pointer select-none",
+              measureMode ? "opacity-100" : "opacity-60 hover:opacity-100"
+            )}
+              onClick={() => { setMeasureMode(m => !m); setMeasurePoints([]); }}
+            >
+              <kbd className="text-[8px] bg-zinc-800 border border-zinc-700 px-1 rounded text-zinc-400">M</kbd>
+              <span className={cn("text-[9px]", measureMode ? "text-yellow-400" : "text-zinc-500")}>
+                {measureMode
+                  ? measureDistance !== null
+                    ? `${measureDistance.toFixed(1)} km`
+                    : "Click two points"
+                  : "Measure distance"}
+              </span>
+            </div>
           </div>
         </div>
       )}

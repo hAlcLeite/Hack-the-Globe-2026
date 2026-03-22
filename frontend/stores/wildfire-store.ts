@@ -3,13 +3,12 @@ import {
   CANADA_VIEW,
   PROVINCE_VIEW,
   INCIDENT_VIEW,
-  FIRST_RESPONDERS,
-  ACTION_ASSETS,
+  GROUND_CREW_TEAMS,
+  FIRE_ACTIONS,
 } from "@/data/fake-wildfire";
-import { fetchFires, type FireEvent } from "@/lib/api";
 
 export type ViewLevel = "national" | "province" | "incident";
-export type ResourceType = "ground-crew" | "air-tanker" | "helicopter" | "heavy-equipment";
+export type ResourceType = "ground-crew" | "planned-burn" | "dozer-line";
 export type ResourceStatus = "standby" | "ready" | "deployed";
 
 export interface Resource {
@@ -17,9 +16,9 @@ export interface Resource {
   name: string;
   type: ResourceType;
   count?: number;
+  experience?: string;
   status: ResourceStatus;
-  icon: string;
-  assignedLocation?: string;
+  description?: string;
   deployedPosition?: [number, number];
 }
 
@@ -38,22 +37,21 @@ interface WildfireState {
   viewport: Viewport;
   setViewport: (vp: Viewport) => void;
 
-  // ── Live fire data from backend ──────────────────────────────────────────
-  fires: FireEvent[];
-  firesLoading: boolean;
-  firesError: string | null;
-  fetchFires: () => Promise<void>;
-  selectedFireId: string | null;
-  setSelectedFireId: (id: string | null) => void;
-
-  firstResponders: Resource[];
-  actionAssets: Resource[];
+  groundCrews: Resource[];
+  fireActions: Resource[];
 
   selectedResourceId: string | null;
   setSelectedResourceId: (id: string | null) => void;
 
+  placementMousePos: { lng: number; lat: number } | null;
+  setPlacementMousePos: (pos: { lng: number; lat: number } | null) => void;
+
+  plannedBurnPoints: [number, number][];
+  addPlannedBurnPoint: (point: [number, number]) => void;
+  clearPlannedBurnPoints: () => void;
+
   deployResource: (id: string, position: [number, number]) => void;
-  assignResourceLocation: (id: string, label: string) => void;
+  removeDeployment: (id: string) => void;
 
   submitted: boolean;
   submittedAt: string | null;
@@ -61,9 +59,7 @@ interface WildfireState {
   resetMission: () => void;
 
   isAiSidebarOpen: boolean;
-  isMediaSidebarOpen: boolean;
   toggleAiSidebar: () => void;
-  toggleMediaSidebar: () => void;
 }
 
 export const useWildfireStore = create<WildfireState>((set) => ({
@@ -81,48 +77,47 @@ export const useWildfireStore = create<WildfireState>((set) => ({
   viewport: CANADA_VIEW,
   setViewport: (vp) => set({ viewport: vp }),
 
-  // ── Fire data ─────────────────────────────────────────────────────────────
-  fires: [],
-  firesLoading: false,
-  firesError: null,
-  selectedFireId: null,
-  setSelectedFireId: (id) => set({ selectedFireId: id }),
-  fetchFires: async () => {
-    set({ firesLoading: true, firesError: null });
-    try {
-      const fires = await fetchFires();
-      set({ fires, firesLoading: false });
-    } catch {
-      set({ firesError: "Failed to load fire data", firesLoading: false });
-    }
-  },
-
-  firstResponders: FIRST_RESPONDERS.map((r) => ({ ...r })) as Resource[],
-  actionAssets: ACTION_ASSETS.map((r) => ({ ...r })) as Resource[],
+  groundCrews: GROUND_CREW_TEAMS.map((r) => ({ ...r })) as Resource[],
+  fireActions: FIRE_ACTIONS.map((r) => ({ ...r })) as Resource[],
 
   selectedResourceId: null,
   setSelectedResourceId: (id) => set({ selectedResourceId: id }),
 
+  placementMousePos: null,
+  setPlacementMousePos: (pos) => set({ placementMousePos: pos }),
+
+  plannedBurnPoints: [],
+  addPlannedBurnPoint: (point) =>
+    set((state) => ({ plannedBurnPoints: [...state.plannedBurnPoints, point] })),
+  clearPlannedBurnPoints: () => set({ plannedBurnPoints: [] }),
+
   deployResource: (id, position) =>
     set((state) => ({
-      firstResponders: state.firstResponders.map((r) =>
+      groundCrews: state.groundCrews.map((r) =>
         r.id === id ? { ...r, deployedPosition: position, status: "deployed" } : r
       ),
-      actionAssets: state.actionAssets.map((r) =>
+      fireActions: state.fireActions.map((r) =>
         r.id === id ? { ...r, deployedPosition: position, status: "deployed" } : r
       ),
       selectedResourceId: null,
+      placementMousePos: null,
     })),
 
-  assignResourceLocation: (id, label) =>
-    set((state) => ({
-      firstResponders: state.firstResponders.map((r) =>
-        r.id === id ? { ...r, assignedLocation: label } : r
-      ),
-      actionAssets: state.actionAssets.map((r) =>
-        r.id === id ? { ...r, assignedLocation: label } : r
-      ),
-    })),
+  removeDeployment: (id) =>
+    set((state) => {
+      const isBurn = state.fireActions.find((r) => r.id === id)?.type === "planned-burn";
+      return {
+        groundCrews: state.groundCrews.map((r) =>
+          r.id === id ? { ...r, deployedPosition: undefined, status: "standby" } : r
+        ),
+        fireActions: state.fireActions.map((r) =>
+          r.id === id
+            ? { ...r, deployedPosition: undefined, status: r.status === "deployed" ? "ready" : r.status }
+            : r
+        ),
+        ...(isBurn ? { plannedBurnPoints: [] } : {}),
+      };
+    }),
 
   submitted: false,
   submittedAt: null,
@@ -138,13 +133,13 @@ export const useWildfireStore = create<WildfireState>((set) => ({
     set({
       submitted: false,
       submittedAt: null,
-      firstResponders: FIRST_RESPONDERS.map((r) => ({ ...r })) as Resource[],
-      actionAssets: ACTION_ASSETS.map((r) => ({ ...r })) as Resource[],
+      groundCrews: GROUND_CREW_TEAMS.map((r) => ({ ...r })) as Resource[],
+      fireActions: FIRE_ACTIONS.map((r) => ({ ...r })) as Resource[],
       selectedResourceId: null,
+      placementMousePos: null,
+      plannedBurnPoints: [],
     }),
 
   isAiSidebarOpen: true,
-  isMediaSidebarOpen: true,
   toggleAiSidebar: () => set((s) => ({ isAiSidebarOpen: !s.isAiSidebarOpen })),
-  toggleMediaSidebar: () => set((s) => ({ isMediaSidebarOpen: !s.isMediaSidebarOpen })),
 }));
