@@ -10,8 +10,15 @@ import {
   RotateCcw,
   X,
   ChevronUp,
-  Shovel,
+  Tractor,
+  PlaneTakeoff,
 } from "lucide-react";
+import type { ResourceType } from "@/stores/wildfire-store";
+
+const ACTION_ICON: Record<string, React.ReactNode> = {
+  "dozer-line": <Tractor className="h-4 w-4 text-stone-400" />,
+  "air-tanker": <PlaneTakeoff className="h-4 w-4 text-sky-400" />,
+};
 import { useWildfireStore } from "@/stores/wildfire-store";
 import type { Resource } from "@/stores/wildfire-store";
 import { cn } from "@/lib/utils";
@@ -123,31 +130,39 @@ function GroundCrewCard() {
 }
 
 function PlannedBurnCard() {
-  const { fireActions, selectedResourceId, setSelectedResourceId, removeDeployment, submitted, plannedBurnPoints } =
-    useWildfireStore();
+  const {
+    fireActions,
+    selectedResourceId,
+    setSelectedResourceId,
+    removeDeployment,
+    submitted,
+    activeBurnLine,
+    deployedBurnLines,
+  } = useWildfireStore();
   const resource = fireActions.find((r) => r.type === "planned-burn");
   if (!resource) return null;
 
   const isSelected = selectedResourceId === resource.id;
-  const isDeployed = !!resource.deployedPosition;
+  const hasLines = deployedBurnLines.length > 0;
 
   const handleClick = () => {
-    if (submitted || isDeployed) return;
+    if (submitted) return;
     setSelectedResourceId(isSelected ? null : resource.id);
   };
 
   let statusText = "Draw burn line";
-  if (isDeployed) statusText = "Burn line set";
-  else if (isSelected) {
-    statusText = plannedBurnPoints.length === 0 ? "Click pt. 1 on map" : "Click pt. 2 to finish";
+  if (hasLines && !isSelected) {
+    statusText = `${deployedBurnLines.length} line${deployedBurnLines.length > 1 ? "s" : ""} set`;
+  } else if (isSelected) {
+    statusText = activeBurnLine.length === 0 ? "Click pt. 1 on map" : "Click pt. 2 to finish";
   }
 
   return (
     <div
       className={cn(
         "flex flex-col gap-1 px-3 py-2 border cursor-pointer w-36 transition-all shrink-0",
-        isDeployed
-          ? "border-green-600/50 bg-green-900/20 cursor-default"
+        hasLines && !isSelected
+          ? "border-orange-500/60 bg-orange-900/25"
           : isSelected
             ? "border-orange-500 bg-orange-950/40"
             : "bg-orange-900/30 border-orange-700/50 hover:brightness-125",
@@ -157,7 +172,7 @@ function PlannedBurnCard() {
     >
       <div className="flex items-center justify-between">
         <Flame className="h-4 w-4 text-orange-400" />
-        {isDeployed && !submitted ? (
+        {hasLines && !submitted ? (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -201,7 +216,7 @@ function ActionCard({ resource }: { resource: Resource }) {
       onClick={handleClick}
     >
       <div className="flex items-center justify-between">
-        <Shovel className="h-4 w-4 text-stone-400" />
+        {ACTION_ICON[resource.type] ?? <Tractor className="h-4 w-4 text-stone-400" />}
         {isDeployed && !submitted ? (
           <button
             onClick={(e) => {
@@ -233,11 +248,18 @@ export function DeploymentBar({ visible }: { visible: boolean }) {
     submit,
     resetMission,
     isAiSidebarOpen,
-    plannedBurnPoints,
+    activeBurnLine,
+    deployedBurnLines,
+    gameLinearHour,
+    gameMinute,
+    gameWon,
   } = useWildfireStore();
 
   const allResources = [...groundCrews, ...fireActions];
-  const deployedCount = allResources.filter((r) => r.deployedPosition).length;
+  const nonBurnDeployed = allResources.filter(
+    (r) => r.type !== "planned-burn" && r.deployedPosition
+  ).length;
+  const deployedCount = nonBurnDeployed + deployedBurnLines.length;
 
   const selectedResource = selectedResourceId
     ? allResources.find((r) => r.id === selectedResourceId) ?? null
@@ -249,7 +271,7 @@ export function DeploymentBar({ visible }: { visible: boolean }) {
   let hintText = "Click anywhere on the map to place this unit — or click the card again to deselect";
   if (isPlannedBurnSelecting) {
     hintText =
-      plannedBurnPoints.length === 0
+      activeBurnLine.length === 0
         ? "Click first point on map to start burn line, then click second point to complete"
         : "Now click the second point to complete the burn line";
   }
@@ -315,6 +337,9 @@ export function DeploymentBar({ visible }: { visible: boolean }) {
         <div className="flex-1" />
 
         <div className="shrink-0 flex flex-col items-end gap-1.5">
+          <div className="text-[9px] text-zinc-600 font-mono">
+            {String(gameLinearHour % 24).padStart(2, "0")}:{String(gameMinute).padStart(2, "0")}
+          </div>
           {!submitted ? (
             <button
               onClick={submit}

@@ -46,6 +46,14 @@ const RESOURCE_EMOJI: Record<string, string> = {
   "ground-crew": "👥",
   "planned-burn": "🔥",
   "dozer-line": "🚜",
+  "air-tanker": "✈️",
+};
+
+const PRIORITY_RING: Record<string, string> = {
+  CRITICAL: "#ef4444",
+  HIGH: "#f97316",
+  MEDIUM: "#f59e0b",
+  LOW: "#6b7280",
 };
 
 function ResourceMarker({ resource }: { resource: Resource }) {
@@ -81,6 +89,46 @@ function PlacementIndicator({ resource }: { resource: Resource }) {
       <div className="mt-1 bg-blue-950/90 border border-blue-500/50 px-2 py-1 text-[9px] text-blue-300 whitespace-nowrap">
         {resource.name}
       </div>
+    </div>
+  );
+}
+
+function SuggestionZoneMarker({
+  rec,
+  isFocused,
+}: {
+  rec: import("@/stores/wildfire-store").AiRecommendation;
+  isFocused: boolean;
+}) {
+  const color = PRIORITY_RING[rec.priority] ?? "#6b7280";
+  const emoji = RESOURCE_EMOJI[rec.resource_type ?? "ground-crew"] ?? "📍";
+  const size = isFocused ? 52 : 40;
+
+  return (
+    <div className="flex flex-col items-center group cursor-default" style={{ width: size, height: size }}>
+      {/* Pulsing ring */}
+      <div
+        className="absolute rounded-full animate-ping opacity-30"
+        style={{ width: size, height: size, border: `2px solid ${color}` }}
+      />
+      <div
+        className="relative rounded-full flex items-center justify-center text-sm shadow-xl"
+        style={{
+          width: size,
+          height: size,
+          border: `2px solid ${color}`,
+          background: `${color}22`,
+          boxShadow: `0 0 16px ${color}55`,
+        }}
+      >
+        {emoji}
+      </div>
+      {/* Label on focus */}
+      {isFocused && (
+        <div className="mt-1 bg-zinc-900/95 border border-zinc-700 px-2 py-1 text-[9px] text-white whitespace-nowrap shadow-xl max-w-[160px] text-center leading-tight">
+          {rec.title}
+        </div>
+      )}
     </div>
   );
 }
@@ -187,18 +235,24 @@ export function WildfireMap() {
     setViewLevel,
     setViewport,
     selectedResourceId,
+    setSelectedResourceId,
     deployResource,
+    removeDeployment,
     setPlacementMousePos,
     placementMousePos,
     groundCrews,
     fireActions,
-    plannedBurnPoints,
-    addPlannedBurnPoint,
+    activeBurnLine,
+    addActiveBurnPoint,
+    commitBurnLine,
+    deployedBurnLines,
     fireSnapshot,
     tickFireSimulation,
     chokePoints,
     backendStatus,
     fetchBackendData,
+    aiRecommendations,
+    focusedRecommendationIndex,
   } = useWildfireStore();
 
   const allResources = [...groundCrews, ...fireActions];
@@ -235,7 +289,7 @@ export function WildfireMap() {
   // Tick fire simulation every 3s while in incident view
   useEffect(() => {
     if (viewLevel !== "incident") return;
-    const id = setInterval(tickFireSimulation, 3000);
+    const id = setInterval(tickFireSimulation, 1000);
     return () => clearInterval(id);
   }, [viewLevel, tickFireSimulation]);
 
@@ -245,6 +299,20 @@ export function WildfireMap() {
       fetchBackendData();
     }
   }, [viewLevel, backendStatus, fetchBackendData]);
+
+  // Fly to a focused AI recommendation's coordinates
+  useEffect(() => {
+    if (focusedRecommendationIndex === null || !mapRef.current || !mapLoaded) return;
+    const rec = aiRecommendations?.[focusedRecommendationIndex];
+    if (!rec || typeof rec.lat !== "number" || typeof rec.lon !== "number") return;
+    mapRef.current.flyTo({
+      center: [rec.lon, rec.lat],
+      zoom: 13.5,
+      pitch: 55,
+      bearing: -20,
+      duration: 1200,
+    });
+  }, [focusedRecommendationIndex, aiRecommendations, mapLoaded]);
 
   // [M] hotkey toggles measure mode
   useEffect(() => {
@@ -272,11 +340,14 @@ export function WildfireMap() {
       }
       if (selectedResourceId && viewLevel === "incident") {
         if (selectedResource?.type === "planned-burn") {
-          if (plannedBurnPoints.length === 0) {
-            addPlannedBurnPoint([event.lngLat.lng, event.lngLat.lat]);
-          } else if (plannedBurnPoints.length === 1) {
-            addPlannedBurnPoint([event.lngLat.lng, event.lngLat.lat]);
-            deployResource(selectedResourceId, [event.lngLat.lng, event.lngLat.lat]);
+          const pt: [number, number] = [event.lngLat.lng, event.lngLat.lat];
+          if (activeBurnLine.length === 0) {
+            addActiveBurnPoint(pt);
+          } else {
+            // Second click: add point and commit the line — stays selectable for another
+            addActiveBurnPoint(pt);
+            commitBurnLine();
+            setSelectedResourceId(null);
           }
           return;
         }
@@ -291,7 +362,7 @@ export function WildfireMap() {
         if (dist < 2.5) setViewLevel("province");
       }
     },
-    [measureMode, selectedResourceId, selectedResource, viewLevel, deployResource, setViewLevel, plannedBurnPoints, addPlannedBurnPoint]
+    [measureMode, selectedResourceId, selectedResource, viewLevel, deployResource, setViewLevel, activeBurnLine, addActiveBurnPoint, commitBurnLine, setSelectedResourceId]
   );
 
   const mouseRaf = useRef<number | null>(null);
@@ -321,22 +392,35 @@ export function WildfireMap() {
     };
   }, []);
 
-  // Planned burn line GeoJSON
-  const burnLineGeoJSON = useMemo(() => {
-    if (plannedBurnPoints.length < 2) return null;
+  // Active (in-progress) burn line GeoJSON
+  const activeBurnLineGeoJSON = useMemo(() => {
+    if (activeBurnLine.length < 2) return null;
     return {
       type: "FeatureCollection" as const,
-      features: [{ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: plannedBurnPoints } }],
+      features: [{ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: activeBurnLine } }],
     };
-  }, [plannedBurnPoints]);
+  }, [activeBurnLine]);
+
+  // All committed burn lines GeoJSON (as a MultiLineString for efficiency)
+  const deployedBurnLinesGeoJSON = useMemo(() => {
+    if (deployedBurnLines.length === 0) return null;
+    return {
+      type: "FeatureCollection" as const,
+      features: deployedBurnLines.map((line, i) => ({
+        type: "Feature" as const,
+        properties: { id: i },
+        geometry: { type: "LineString" as const, coordinates: line },
+      })),
+    };
+  }, [deployedBurnLines]);
 
   const burnPreviewGeoJSON = useMemo(() => {
-    if (plannedBurnPoints.length !== 1 || !placementMousePos || selectedResource?.type !== "planned-burn") return null;
+    if (activeBurnLine.length !== 1 || !placementMousePos || selectedResource?.type !== "planned-burn") return null;
     return {
       type: "FeatureCollection" as const,
-      features: [{ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: [plannedBurnPoints[0], [placementMousePos.lng, placementMousePos.lat]] } }],
+      features: [{ type: "Feature" as const, properties: {}, geometry: { type: "LineString" as const, coordinates: [activeBurnLine[0], [placementMousePos.lng, placementMousePos.lat]] } }],
     };
-  }, [plannedBurnPoints, placementMousePos, selectedResource?.type]);
+  }, [activeBurnLine, placementMousePos, selectedResource?.type]);
 
   const measureLineGeoJSON = useMemo(() => {
     if (measurePoints.length !== 2) return null;
@@ -640,11 +724,18 @@ export function WildfireMap() {
           </>
         )}
 
-        {/* ── Planned burn line overlay ── */}
-        {viewLevel === "incident" && burnLineGeoJSON && (
-          <Source id="planned-burn-line" type="geojson" data={burnLineGeoJSON}>
-            <Layer id="planned-burn-line-glow" type="line" paint={{ "line-color": "#f97316", "line-width": 8, "line-blur": 6, "line-opacity": 0.3 }} />
-            <Layer id="planned-burn-line-main" type="line" paint={{ "line-color": "#fb923c", "line-width": 3, "line-dasharray": [4, 2], "line-opacity": 0.95 }} />
+        {/* ── Committed burn barriers ── */}
+        {viewLevel === "incident" && deployedBurnLinesGeoJSON && (
+          <Source id="deployed-burn-lines" type="geojson" data={deployedBurnLinesGeoJSON}>
+            <Layer id="deployed-burn-glow" type="line" paint={{ "line-color": "#ef4444", "line-width": 10, "line-blur": 8, "line-opacity": 0.25 }} />
+            <Layer id="deployed-burn-main" type="line" paint={{ "line-color": "#fb923c", "line-width": 3, "line-dasharray": [4, 2], "line-opacity": 0.95 }} />
+          </Source>
+        )}
+        {/* ── Active (in-progress) burn line ── */}
+        {viewLevel === "incident" && activeBurnLineGeoJSON && (
+          <Source id="active-burn-line" type="geojson" data={activeBurnLineGeoJSON}>
+            <Layer id="active-burn-line-glow" type="line" paint={{ "line-color": "#f97316", "line-width": 8, "line-blur": 6, "line-opacity": 0.3 }} />
+            <Layer id="active-burn-line-main" type="line" paint={{ "line-color": "#fb923c", "line-width": 3, "line-dasharray": [4, 2], "line-opacity": 0.9 }} />
           </Source>
         )}
         {viewLevel === "incident" && burnPreviewGeoJSON && (
@@ -652,8 +743,8 @@ export function WildfireMap() {
             <Layer id="planned-burn-preview-line" type="line" paint={{ "line-color": "#f97316", "line-width": 2, "line-dasharray": [3, 3], "line-opacity": 0.55 }} />
           </Source>
         )}
-        {viewLevel === "incident" && plannedBurnPoints.length >= 1 && (
-          <Marker longitude={plannedBurnPoints[0][0]} latitude={plannedBurnPoints[0][1]} anchor="center">
+        {viewLevel === "incident" && activeBurnLine.length >= 1 && (
+          <Marker longitude={activeBurnLine[0][0]} latitude={activeBurnLine[0][1]} anchor="center">
             <div className="h-3 w-3 rounded-full bg-orange-500 border-2 border-orange-300 shadow shadow-orange-500/50" />
           </Marker>
         )}
@@ -689,14 +780,24 @@ export function WildfireMap() {
           </Marker>
         )}
 
-        {/* ── Deployed resource markers ── */}
+        {/* ── Deployed resource markers — click to redeploy ── */}
         {viewLevel === "incident" &&
           deployedResources
             .filter((r) => r.type !== "planned-burn")
             .map((r) =>
               r.deployedPosition ? (
                 <Marker key={r.id} longitude={r.deployedPosition[0]} latitude={r.deployedPosition[1]} anchor="bottom">
-                  <ResourceMarker resource={r} />
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeDeployment(r.id);
+                      setSelectedResourceId(r.id);
+                    }}
+                    title="Click to redeploy"
+                    className="cursor-pointer"
+                  >
+                    <ResourceMarker resource={r} />
+                  </div>
                 </Marker>
               ) : null
             )}
@@ -709,6 +810,19 @@ export function WildfireMap() {
               <PlacementIndicator resource={selectedResource} />
             </Marker>
           )}
+
+        {/* ── AI recommendation suggestion zones ── */}
+        {viewLevel === "incident" &&
+          aiRecommendations?.map((rec, i) => {
+            if (typeof rec.lat !== "number" || typeof rec.lon !== "number") return null;
+            // Validate coordinates are within BC bounds
+            if (rec.lat < 49 || rec.lat > 60 || rec.lon < -140 || rec.lon > -114) return null;
+            return (
+              <Marker key={`ai-${i}`} longitude={rec.lon} latitude={rec.lat} anchor="center">
+                <SuggestionZoneMarker rec={rec} isFocused={focusedRecommendationIndex === i} />
+              </Marker>
+            );
+          })}
 
         {/* ── PPO / AI tactical waypoints ── */}
         {viewLevel === "incident" &&

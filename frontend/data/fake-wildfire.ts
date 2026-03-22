@@ -115,6 +115,13 @@ export const FIRE_ACTIONS = [
     description: "Bulldozer cuts mineral soil containment line",
     status: "ready" as const,
   },
+  {
+    id: "fa-air-tanker",
+    name: "Air Tanker",
+    type: "air-tanker" as const,
+    description: "8,000L retardant drop — suppresses 800m radius, slows head fire",
+    status: "ready" as const,
+  },
 ];
 
 export const AI_SUGGESTIONS = [

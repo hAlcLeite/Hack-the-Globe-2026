@@ -36,6 +36,39 @@ function dot(a: [number, number], b: [number, number]): number {
   return a[0] * b[0] + a[1] * b[1];
 }
 
+/**
+ * Squared distance from point (px,py) to segment (ax,ay)→(bx,by) in the same 2D space.
+ * Used for barrier proximity checks (avoids a sqrt when comparing to threshold²).
+ */
+function distToSegmentSq(
+  px: number, py: number,
+  ax: number, ay: number, bx: number, by: number
+): number {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return (px - ax) ** 2 + (py - ay) ** 2;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return (px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2;
+}
+
+/**
+ * Returns the parametric t ∈ [0,1] on segment p1→p2 where it crosses p3→p4,
+ * or null if no crossing within both segments.
+ */
+function segmentCrossT(
+  ax: number, ay: number, bx: number, by: number,
+  cx: number, cy: number, dx: number, dy: number
+): number | null {
+  const d1x = bx - ax, d1y = by - ay;
+  const d2x = dx - cx, d2y = dy - cy;
+  const denom = d1x * d2y - d1y * d2x;
+  if (Math.abs(denom) < 1e-10) return null;
+  const t = ((cx - ax) * d2y - (cy - ay) * d2x) / denom;
+  const u = ((cx - ax) * d1y - (cy - ay) * d1x) / denom;
+  if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return t;
+  return null;
+}
+
 function normalize(v: [number, number]): [number, number] {
   const len = Math.sqrt(v[0] ** 2 + v[1] ** 2);
   return len === 0 ? [0, 0] : [v[0] / len, v[1] / len];
@@ -128,8 +161,10 @@ export function generateInitialPerimeter(
  * Spread a perimeter outward with wind-biased asymmetry.
  * One pass (O(n)) — no iteration loop needed.
  *
- * @param baseSpreadM  Total base spread in meters (isotropic component)
- * @param addNoise     Whether to add organic noise (false for clean forecasts)
+ * @param baseSpreadM        Total base spread in meters (isotropic component)
+ * @param addNoise           Whether to add organic noise (false for clean forecasts)
+ * @param barriers           Polylines in [lng,lat] that block fire movement (planned burns, dozer lines)
+ * @param containmentPoints  [lng,lat] points that slow spread within their radius (crew positions)
  */
 export function spreadPerimeter(
   perimeterCoords: [number, number][],
@@ -137,14 +172,26 @@ export function spreadPerimeter(
   windFromDirDeg: number,
   windSpeedKph: number,
   baseSpreadM: number,
-  addNoise = true
+  addNoise = true,
+  barriers: [number, number][][] = [],
+  containmentPoints: [number, number][] = []
 ): [number, number][] {
   const wind = windVector(windFromDirDeg);
   const open = openRing(perimeterCoords);
   const mPts = open.map(([lng, lat]) => toMeters(lng, lat, center));
   const ctr = centroid2d(mPts);
 
-  const newMPts = mPts.map((pt) => {
+  // Pre-convert barriers and containment to meter-space for performance
+  const barrierSegments: Array<[number, number, number, number]> = [];
+  for (const line of barriers) {
+    const mLine = line.map(([lng, lat]) => toMeters(lng, lat, center));
+    for (let j = 0; j < mLine.length - 1; j++) {
+      barrierSegments.push([mLine[j][0], mLine[j][1], mLine[j + 1][0], mLine[j + 1][1]]);
+    }
+  }
+  const mContain = containmentPoints.map(([lng, lat]) => toMeters(lng, lat, center));
+
+  const newMPts = mPts.map((pt, i) => {
     // Outward direction from polygon centroid
     const outward = normalize([pt[0] - ctr[0], pt[1] - ctr[1]]);
 
@@ -161,12 +208,45 @@ export function spreadPerimeter(
       ? (Math.random() - 0.5) * 0.25 * baseSpreadM
       : 0;
 
-    const totalSpread = baseSpreadM * spreadFactor + speedBonus + noiseM;
+    let totalSpread = baseSpreadM * spreadFactor + speedBonus + noiseM;
 
-    return [
+    // Barrier proximity freeze: if current point is within 350m of a barrier segment,
+    // the fuel has been removed — point stays completely frozen.
+    const BARRIER_ZONE_SQ = 350 * 350;
+    for (const [cx, cy, dx, dy] of barrierSegments) {
+      if (distToSegmentSq(pt[0], pt[1], cx, cy, dx, dy) < BARRIER_ZONE_SQ) {
+        return pt as [number, number];
+      }
+    }
+
+    // Containment slowdown: ground crews/dozer within radius reduce spread
+    for (const cp of mContain) {
+      const dist = Math.sqrt((pt[0] - cp[0]) ** 2 + (pt[1] - cp[1]) ** 2);
+      if (dist < 900) {
+        // Slow spread to 20% within 900m of a containment point
+        totalSpread *= 0.2;
+        break;
+      }
+    }
+
+    const newPt: [number, number] = [
       pt[0] + outward[0] * totalSpread,
       pt[1] + outward[1] * totalSpread,
-    ] as [number, number];
+    ];
+
+    // Barrier check: if movement from pt → newPt crosses a barrier segment, cap at crossing
+    for (const [cx, cy, dx, dy] of barrierSegments) {
+      const t = segmentCrossT(pt[0], pt[1], newPt[0], newPt[1], cx, cy, dx, dy);
+      if (t !== null) {
+        // Snap to intersection — fire cannot cross this barrier
+        return [
+          pt[0] + t * (newPt[0] - pt[0]),
+          pt[1] + t * (newPt[1] - pt[1]),
+        ] as [number, number];
+      }
+    }
+
+    return newPt;
   });
 
   return closeRing(newMPts.map(([e, n]) => fromMeters(e, n, center)));
@@ -356,17 +436,23 @@ export function updateSnapshotWithRealData(
 }
 
 // How much the perimeter grows per simulation tick (meters, base isotropic component)
-const TICK_BASE_SPREAD_M = 18;
+// 4m/tick at 3s = ~80–160 m/min head fire — realistic for an extreme wildfire demo
+const TICK_BASE_SPREAD_M = 12;
 // Burn scar grows at a fraction of the perimeter rate
 const BURN_SCAR_SPREAD_FACTOR = 0.25;
 
 /**
  * Advance the fire by one simulation tick.
  * Call every ~3 real seconds when in incident view.
+ *
+ * @param barriers          Polylines ([lng,lat][]) that block fire spread
+ * @param containmentPoints [lng,lat] points that slow spread within 900m radius
  */
 export function tickSnapshot(
   snapshot: FireSnapshot,
-  center: [number, number]
+  center: [number, number],
+  barriers: [number, number][][] = [],
+  containmentPoints: [number, number][] = []
 ): FireSnapshot {
   const { wind, _perimCoords, _burnCoords } = snapshot;
 
@@ -376,7 +462,9 @@ export function tickSnapshot(
     wind.directionDeg,
     wind.speedKph,
     TICK_BASE_SPREAD_M,
-    true
+    true,
+    barriers,
+    containmentPoints
   );
 
   const newBurnCoords = spreadPerimeter(
@@ -385,7 +473,8 @@ export function tickSnapshot(
     wind.directionDeg,
     wind.speedKph,
     TICK_BASE_SPREAD_M * BURN_SCAR_SPREAD_FACTOR,
-    false
+    false,
+    barriers
   );
 
   const f1hCoords = spreadPerimeter(
@@ -394,7 +483,8 @@ export function tickSnapshot(
     wind.directionDeg,
     wind.speedKph,
     600,
-    false
+    false,
+    barriers
   );
   const f3hCoords = spreadPerimeter(
     newPerimCoords,
@@ -402,7 +492,8 @@ export function tickSnapshot(
     wind.directionDeg,
     wind.speedKph,
     1500,
-    false
+    false,
+    barriers
   );
 
   const hotspotsXY = generateHotspots(newPerimCoords, center, wind.directionDeg, 20);

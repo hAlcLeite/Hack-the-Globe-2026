@@ -1,14 +1,14 @@
-# 🌲 CanopyOS — National Wildfire Tactical Intelligence Platform
+# 🌲 FireGrid — National Wildfire Tactical Intelligence Platform
 
-> **Hack the Globe 2026** — Built by Team CanopyOS
+> **Hack the Globe 2026** — Built by Team FireGrid
 
-CanopyOS is a **Palantir-style predictive command system** for Canadian wildland fire response. Canada's wildfire intelligence is historically fragmented across provincial agencies (BC Wildfire Service, Alberta Wildfire), federal systems (CWFIS, CIFFC), and satellite networks. CanopyOS unifies all of this into a single real-time platform — ingesting live fire data, fusing it with fire weather indices, and using machine learning to predict fire spread and optimize first-responder deployment.
+FireGrid is a **Palantir-style predictive command system** for Canadian wildland fire response. Canada's wildfire intelligence is historically fragmented across provincial agencies (BC Wildfire Service, Alberta Wildfire), federal systems (CWFIS, CIFFC), and satellite networks. FireGrid unifies all of this into a single real-time platform — ingesting live fire data, fusing it with fire weather indices, and using machine learning to predict fire spread and optimize first-responder deployment.
 
 ---
 
 ## 🎯 The Problem
 
-Canada has no centralized, real-time wildfire command system. Fire managers across BC, Alberta, and the territories are making life-or-death deployment decisions using siloed spreadsheets, phone calls between agencies, and manually reading satellite imagery. Every hour of delay in asset deployment costs thousands of hectares of forest. CanopyOS solves this.
+Canada has no centralized, real-time wildfire command system. Fire managers across BC, Alberta, and the territories are making life-or-death deployment decisions using siloed spreadsheets, phone calls between agencies, and manually reading satellite imagery. Every hour of delay in asset deployment costs thousands of hectares of forest. FireGrid solves this.
 
 ---
 
@@ -27,7 +27,7 @@ Canada has no centralized, real-time wildfire command system. Fire managers acro
 
 | Component | Technology |
 |---|---|
-| **Frontend** | Next.js 15, TypeScript, Zustand, react-map-gl (MapLibre), Framer Motion |
+| **Frontend** | Next.js 15, TypeScript, Zustand, react-map-gl (Mapbox), Framer Motion |
 | **Backend API** | Python 3.12, FastAPI, Uvicorn |
 | **Database** | AWS DynamoDB (`ca-central-1`) |
 | **ML Models** | XGBoost, scikit-learn, pandas |

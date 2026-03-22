@@ -24,7 +24,7 @@ export function LeftSidebar() {
     <aside className="fixed left-0 top-0 z-50 h-screen w-14 border-r border-zinc-800 bg-zinc-950 flex flex-col items-center">
       <div className="w-full border-b border-zinc-800 flex flex-col items-center justify-center h-14 bg-zinc-900/60 shrink-0 gap-0.5">
         <Flame className="h-4 w-4 text-orange-500" strokeWidth={1.5} />
-        <span className="text-[7px] text-zinc-600 uppercase tracking-widest">Phoenix</span>
+        <span className="text-[7px] text-zinc-600 uppercase tracking-widest">FireGrid</span>
       </div>
 
       <div className="w-full px-1 py-1.5 border-b border-zinc-800 shrink-0 flex justify-center">

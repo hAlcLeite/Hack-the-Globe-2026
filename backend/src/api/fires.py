@@ -12,6 +12,7 @@ Data sources:
 from fastapi import APIRouter, HTTPException
 from src.core.db import get_all_fire_events, get_fire_event
 from src.ingestion.firms import get_firms_fires
+from src.ingestion.cwfis import get_cwfis_fires
 
 router = APIRouter(prefix="/fires", tags=["Fire Incidents"])
 
@@ -39,6 +40,22 @@ def list_live_fires():
         "count": len(fires),
         "source": "NASA_FIRMS_VIIRS_NOAA20",
         "coverage": "BC + AB (last 24h)",
+        "fires": fires,
+    }
+
+
+@router.get("/cwfis", summary="Fetch active fires from CWFIS NRCan registry (BC + AB)")
+def list_cwfis_fires():
+    """
+    Calls the NRCan CWFIS open data portal to return the daily active fire list
+    for BC and Alberta. Government-authoritative; updated ~13:00 UTC daily.
+    Does NOT touch DynamoDB.
+    """
+    fires = get_cwfis_fires()
+    return {
+        "count": len(fires),
+        "source": "CWFIS_NRCAN",
+        "coverage": "BC + AB (daily update)",
         "fires": fires,
     }
 

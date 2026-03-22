@@ -304,13 +304,32 @@ def predict_spread(fire_id: str, fire_data: Optional[dict] = None) -> dict:
             "wind_v":                wind_speed * math.sin(wind_dir_rad),
             "temperature_c":         weather.get("temperature_c", 25.0),
             "relative_humidity_pct": weather.get("relative_humidity_pct", 35.0),
-            "fwi":                   25.0,        # CFFDRS off-season fallback
+            "fwi":                   25.0,        # CFFDRS fallback (overwritten below if available)
             "isi":                   10.0,
             "bui":                   60.0,
             "area_hectares":         float(area or 500),
             "slope_pct":             5.0,         # default mild uphill
             "rh_trend_24h":          -8.0,        # typical fire-season drying trend
         }
+
+        # Enrich with real CFFDRS fire danger indices from nearest NRCan weather station
+        try:
+            from src.ingestion.cffdrs import get_cffdrs_for_location
+            cffdrs = get_cffdrs_for_location(lat, lon)
+            if cffdrs:
+                if cffdrs.get("fwi") is not None:
+                    features["fwi"] = cffdrs["fwi"]
+                if cffdrs.get("isi") is not None:
+                    features["isi"] = cffdrs["isi"]
+                if cffdrs.get("bui") is not None:
+                    features["bui"] = cffdrs["bui"]
+                logger.info(
+                    f"CFFDRS station '{cffdrs['source_station']}' "
+                    f"({cffdrs['distance_km']} km away): "
+                    f"FWI={cffdrs['fwi']}, ISI={cffdrs['isi']}, BUI={cffdrs['bui']}"
+                )
+        except Exception as e:
+            logger.warning(f"CFFDRS lookup failed for {fire_id}: {e} — using fallback indices")
     else:
         logger.warning(f"No weather for {fire_id} — using defaults")
         features = {}
