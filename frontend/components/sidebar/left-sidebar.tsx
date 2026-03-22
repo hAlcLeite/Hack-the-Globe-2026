@@ -22,23 +22,19 @@ export function LeftSidebar() {
 
   return (
     <aside className="fixed left-0 top-0 z-50 h-screen w-14 border-r border-zinc-800 bg-zinc-950 flex flex-col items-center">
-      {/* Logo */}
       <div className="w-full border-b border-zinc-800 flex flex-col items-center justify-center h-14 bg-zinc-900/60 shrink-0 gap-0.5">
         <Flame className="h-4 w-4 text-orange-500" strokeWidth={1.5} />
         <span className="text-[7px] text-zinc-600 uppercase tracking-widest">Phoenix</span>
       </div>
 
-      {/* View label */}
       <div className="w-full px-1 py-1.5 border-b border-zinc-800 shrink-0 flex justify-center">
         {breadcrumb[viewLevel].map((part, i) => (
           <span key={i} className="text-[8px] text-zinc-600 uppercase tracking-widest">{part}</span>
         ))}
       </div>
 
-      {/* Navigation */}
       <div className="flex-1 w-full mt-1">
         <MenuContainer>
-          {/* toggle-able menu icon is the first child — acts as the collapse trigger */}
           <MenuItem icon={<Flame size={16} strokeWidth={1.5} />} label="Menu" />
           <MenuItem
             icon={<Globe size={16} strokeWidth={1.5} />}
@@ -76,7 +72,6 @@ export function LeftSidebar() {
         </MenuContainer>
       </div>
 
-      {/* Live indicator */}
       <div className="pb-3 flex flex-col items-center gap-1 shrink-0">
         <div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse" />
         <span className="text-[7px] text-zinc-700 uppercase tracking-wider">LIVE</span>

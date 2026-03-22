@@ -168,6 +168,7 @@ export const CAMERA_FEEDS = [
     location: "Ridgeline Camera — 1.8 km NE",
     intensity: "Extreme",
     status: "LIVE",
+    video: "/Videos/Video 1.mp4",
   },
   {
     id: "nw",
@@ -176,6 +177,7 @@ export const CAMERA_FEEDS = [
     location: "Crown Land Lookout",
     intensity: "High",
     status: "LIVE",
+    video: "/Videos/Video 2.mp4",
   },
   {
     id: "se",
@@ -184,6 +186,7 @@ export const CAMERA_FEEDS = [
     location: "Likely FSR Junction Cam",
     intensity: "Moderate",
     status: "LIVE",
+    video: "/Videos/Video 3.mp4",
   },
   {
     id: "sw",
@@ -192,5 +195,6 @@ export const CAMERA_FEEDS = [
     location: "Horsefly Rd Checkpoint",
     intensity: "High",
     status: "LIVE",
+    video: "/Videos/Video 4.mp4",
   },
 ];

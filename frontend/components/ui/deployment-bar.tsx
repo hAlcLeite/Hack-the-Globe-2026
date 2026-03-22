@@ -16,7 +16,6 @@ import { useWildfireStore } from "@/stores/wildfire-store";
 import type { Resource } from "@/stores/wildfire-store";
 import { cn } from "@/lib/utils";
 
-// Sub-card for each ground crew team inside the expanded panel
 function GroundCrewSubCard({ crew }: { crew: Resource }) {
   const { selectedResourceId, setSelectedResourceId, removeDeployment, submitted } =
     useWildfireStore();
@@ -68,7 +67,6 @@ function GroundCrewSubCard({ crew }: { crew: Resource }) {
   );
 }
 
-// Expandable ground crew button + panel
 function GroundCrewCard() {
   const { groundCrews, submitted } = useWildfireStore();
   const [expanded, setExpanded] = useState(false);
@@ -76,7 +74,6 @@ function GroundCrewCard() {
 
   return (
     <div className="relative shrink-0">
-      {/* Expanded crew panel — floats above the bar */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -96,7 +93,6 @@ function GroundCrewCard() {
         )}
       </AnimatePresence>
 
-      {/* Main Ground Crew button */}
       <button
         onClick={() => setExpanded((v) => !v)}
         disabled={submitted}
@@ -126,7 +122,6 @@ function GroundCrewCard() {
   );
 }
 
-// Planned burn line-draw card
 function PlannedBurnCard() {
   const { fireActions, selectedResourceId, setSelectedResourceId, removeDeployment, submitted, plannedBurnPoints } =
     useWildfireStore();
@@ -181,7 +176,6 @@ function PlannedBurnCard() {
   );
 }
 
-// Generic card for point-placement actions (dozer, etc.)
 function ActionCard({ resource }: { resource: Resource }) {
   const { selectedResourceId, setSelectedResourceId, removeDeployment, submitted } =
     useWildfireStore();
@@ -250,7 +244,6 @@ export function DeploymentBar({ visible }: { visible: boolean }) {
     : null;
   const isPlannedBurnSelecting = selectedResource?.type === "planned-burn";
 
-  // Point-placement actions only (exclude planned-burn which has its own card)
   const pointActions = fireActions.filter((r) => r.type !== "planned-burn");
 
   let hintText = "Click anywhere on the map to place this unit — or click the card again to deselect";
@@ -271,7 +264,6 @@ export function DeploymentBar({ visible }: { visible: boolean }) {
         transition: "left 300ms",
       }}
     >
-      {/* Placement hint strip */}
       <AnimatePresence>
         {!!selectedResourceId && (
           <motion.div
@@ -299,16 +291,13 @@ export function DeploymentBar({ visible }: { visible: boolean }) {
       </AnimatePresence>
 
       <div className="flex items-center gap-3 px-4 py-2">
-        {/* Ground crews label */}
         <div className="shrink-0">
           <div className="text-[9px] text-zinc-600 uppercase tracking-widest mb-0.5">Ground Crews</div>
           <div className="text-[9px] text-zinc-700">Tap to expand</div>
         </div>
 
-        {/* Expandable ground crew */}
         <GroundCrewCard />
 
-        {/* Divider */}
         <div className="h-10 w-px bg-zinc-800 shrink-0" />
 
         <div className="shrink-0">
@@ -316,7 +305,6 @@ export function DeploymentBar({ visible }: { visible: boolean }) {
           <div className="text-[9px] text-zinc-700">Click to place</div>
         </div>
 
-        {/* Fire actions */}
         <div className="flex items-center gap-2">
           <PlannedBurnCard />
           {pointActions.map((r) => (
@@ -324,10 +312,8 @@ export function DeploymentBar({ visible }: { visible: boolean }) {
           ))}
         </div>
 
-        {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Submit area */}
         <div className="shrink-0 flex flex-col items-end gap-1.5">
           {!submitted ? (
             <button

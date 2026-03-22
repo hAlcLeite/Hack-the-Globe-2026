@@ -49,7 +49,6 @@ export function AiSidebar() {
           transition={{ type: "spring", damping: 28, stiffness: 220 }}
           className="fixed left-14 top-0 z-40 h-screen w-72 border-r border-zinc-800 bg-zinc-950/96 backdrop-blur-sm flex flex-col"
         >
-          {/* Header */}
           <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2.5 shrink-0 bg-zinc-900/60">
             <div className="flex items-center gap-2">
               <Brain className="h-3.5 w-3.5 text-blue-400" strokeWidth={1.5} />
@@ -67,7 +66,6 @@ export function AiSidebar() {
             </button>
           </div>
 
-          {/* Incident summary */}
           <div className="border-b border-zinc-800 px-3 py-2.5 bg-red-950/20 shrink-0">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[9px] text-zinc-500 uppercase tracking-widest">Status</span>
@@ -92,7 +90,6 @@ export function AiSidebar() {
               </div>
             </div>
 
-            {/* Weather strip */}
             <div className="flex items-center gap-2.5 mt-2 text-[9px] text-zinc-500">
               <span className="flex items-center gap-1">
                 <Wind className="h-2.5 w-2.5" />
@@ -109,10 +106,7 @@ export function AiSidebar() {
             </div>
           </div>
 
-          {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto scrollbar-thin">
-
-            {/* AI Containment suggestions */}
             <div className="px-3 py-3 border-b border-zinc-800">
               <div className="flex items-center gap-1.5 mb-2">
                 <Target className="h-3 w-3 text-blue-400" />
@@ -157,7 +151,6 @@ export function AiSidebar() {
               </div>
             </div>
 
-            {/* Infrastructure at Risk */}
             <div className="px-3 py-3 border-b border-zinc-800">
               <div className="flex items-center gap-1.5 mb-2">
                 <ShieldAlert className="h-3 w-3 text-red-400" />
@@ -175,7 +168,6 @@ export function AiSidebar() {
               </div>
             </div>
 
-            {/* Spread forecast */}
             <div className="px-3 py-3 border-b border-zinc-800">
               <div className="text-[9px] text-zinc-600 uppercase tracking-widest mb-2">Spread Forecast</div>
               <div className="space-y-2">
@@ -207,7 +199,6 @@ export function AiSidebar() {
 
           </div>
 
-          {/* Footer chevron hint */}
           <div className="border-t border-zinc-800 px-3 py-2 bg-zinc-900/40 shrink-0 flex items-center gap-2">
             <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
             <span className="text-[9px] text-zinc-600">Phoenix Watch · Wildfire Intelligence</span>

@@ -12,13 +12,6 @@ const INTENSITY_COLORS: Record<string, string> = {
   Moderate: "text-amber-400",
 };
 
-// Simulated fire color palettes per camera direction
-const CAMERA_PALETTES: Record<string, string> = {
-  ne: "from-orange-950/80 via-red-900/50 to-zinc-900",
-  nw: "from-red-950/60 via-orange-900/40 to-zinc-900",
-  se: "from-zinc-800/80 via-orange-950/40 to-zinc-900",
-  sw: "from-red-900/60 via-orange-950/50 to-zinc-900",
-};
 
 export function CameraPanel({ visible }: { visible: boolean }) {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -37,7 +30,6 @@ export function CameraPanel({ visible }: { visible: boolean }) {
         transition={{ duration: 0.3 }}
         className="bg-zinc-950/95 border border-zinc-800 backdrop-blur-sm overflow-hidden"
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 bg-zinc-900/60">
           <div className="flex items-center gap-1.5">
             <Video className="h-3 w-3 text-red-400" />
@@ -49,7 +41,6 @@ export function CameraPanel({ visible }: { visible: boolean }) {
           </div>
         </div>
 
-        {/* Video area */}
         <AnimatePresence mode="wait">
           <motion.div
             key={active.id}
@@ -57,32 +48,28 @@ export function CameraPanel({ visible }: { visible: boolean }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className={cn(
-              "relative h-36 bg-gradient-to-br",
-              CAMERA_PALETTES[active.id]
-            )}
+            className="relative h-36 bg-zinc-950 overflow-hidden"
           >
-            {/* Simulated fire glow overlay */}
-            <div className="absolute inset-0"
-              style={{
-                backgroundImage: `radial-gradient(ellipse at 40% 80%, rgba(255,100,20,0.35) 0%, transparent 55%),
-                                  radial-gradient(ellipse at 70% 60%, rgba(255,60,0,0.2) 0%, transparent 45%)`,
-              }}
+            <video
+              key={active.id}
+              src={active.video}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover"
             />
-            {/* Scanline effect */}
             <div className="absolute inset-0 opacity-[0.03]"
               style={{
                 backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.5) 2px, rgba(255,255,255,0.5) 3px)",
               }}
             />
 
-            {/* Camera info overlay bottom */}
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-3 py-2">
               <div className="text-[10px] font-medium text-white leading-tight">{active.title}</div>
               <div className="text-[9px] text-zinc-400 mt-0.5">{active.location}</div>
             </div>
 
-            {/* Intensity badge */}
             <div className="absolute top-2 right-2">
               <span className={cn("text-[9px] font-bold uppercase", INTENSITY_COLORS[active.intensity])}>
                 {active.intensity}
@@ -91,7 +78,6 @@ export function CameraPanel({ visible }: { visible: boolean }) {
           </motion.div>
         </AnimatePresence>
 
-        {/* Direction selector */}
         <div className="flex items-center border-t border-zinc-800">
           <button
             onClick={prev}

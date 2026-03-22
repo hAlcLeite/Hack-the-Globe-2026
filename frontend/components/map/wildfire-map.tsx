@@ -8,7 +8,7 @@ import Map, {
   type MapRef,
   type MapMouseEvent,
   type ViewStateChangeEvent,
-} from "react-map-gl/maplibre";
+} from "react-map-gl/mapbox";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, ChevronRight, Flame, ZoomIn } from "lucide-react";
 import { useWildfireStore } from "@/stores/wildfire-store";
@@ -17,7 +17,8 @@ import { WILDFIRE_INCIDENT, FIREBREAK_ROAD_GEOJSON } from "@/data/fake-wildfire"
 import { CANADA_PROVINCE_LABELS_GEOJSON } from "@/data/canada-provinces";
 import { cn } from "@/lib/utils";
 
-const DARK_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+const DARK_STYLE = "mapbox://styles/mapbox/dark-v11";
+const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-streets-v12";
 const CANADA_MAX_BOUNDS = [
   [-145, 40],
   [-48, 84],
@@ -25,98 +26,6 @@ const CANADA_MAX_BOUNDS = [
 
 const ARCGIS_PROVINCES_URL =
   "https://services.arcgis.com/zmLUiqh7X11gGV2d/arcgis/rest/services/Canada_Provinical_boundaries_generalized/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson";
-
-// ---------------------------------------------------------------------------
-// Topographic layer specs — reference the existing "carto" vector source so
-// no extra network requests are needed. source-layer names come from the
-// OpenMapTiles schema used by CartoDB dark-matter.
-// ---------------------------------------------------------------------------
-const TOPO_LAYERS = [
-  // Water bodies (lakes, sea)
-  {
-    id: "topo-water",
-    type: "fill" as const,
-    source: "carto",
-    "source-layer": "water",
-    paint: {
-      "fill-color": "#1d4ed8",
-      "fill-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.25, 8, 0.5, 14, 0.65],
-    },
-  },
-  // Rivers and streams
-  {
-    id: "topo-waterway",
-    type: "line" as const,
-    source: "carto",
-    "source-layer": "waterway",
-    paint: {
-      "line-color": "#2563eb",
-      "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.5, 10, 1.5, 14, 3],
-      "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 7, 0.65, 14, 0.9],
-    },
-  },
-  // Forest / woodland (dark green)
-  {
-    id: "topo-forest",
-    type: "fill" as const,
-    source: "carto",
-    "source-layer": "landcover",
-    filter: ["==", ["get", "class"], "wood"],
-    paint: {
-      "fill-color": "#166534",
-      "fill-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.2, 8, 0.4, 14, 0.55],
-    },
-  },
-  // Grassland / meadow (lighter green)
-  {
-    id: "topo-grass",
-    type: "fill" as const,
-    source: "carto",
-    "source-layer": "landcover",
-    filter: ["==", ["get", "class"], "grass"],
-    paint: {
-      "fill-color": "#15803d",
-      "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 8, 0.3, 14, 0.45],
-    },
-  },
-  // Parks and nature reserves (olive green)
-  {
-    id: "topo-parks",
-    type: "fill" as const,
-    source: "carto",
-    "source-layer": "park",
-    paint: {
-      "fill-color": "#14532d",
-      "fill-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.15, 8, 0.3, 14, 0.45],
-    },
-  },
-  // Major roads — motorway / trunk / primary (yellow)
-  {
-    id: "topo-roads-major",
-    type: "line" as const,
-    source: "carto",
-    "source-layer": "transportation",
-    filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary"]]],
-    paint: {
-      "line-color": "#ca8a04",
-      "line-width": ["interpolate", ["linear"], ["zoom"], 6, 1, 10, 2.5, 14, 5],
-      "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 7, 0.8, 14, 1],
-    },
-  },
-  // Secondary / tertiary roads (amber-brown)
-  {
-    id: "topo-roads-minor",
-    type: "line" as const,
-    source: "carto",
-    "source-layer": "transportation",
-    filter: ["in", ["get", "class"], ["literal", ["secondary", "tertiary", "minor"]]],
-    paint: {
-      "line-color": "#92400e",
-      "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.4, 10, 1, 14, 2],
-      "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 9, 0.7, 14, 1],
-    },
-  },
-];
 
 function haversineKm(a: [number, number], b: [number, number]): number {
   const R = 6371;
@@ -303,7 +212,7 @@ export function WildfireMap() {
       setTimeout(() => setShowWarningCard(true), 2500);
     } else if (viewLevel === "incident") {
       setShowWarningCard(false);
-      map.flyTo({ center: FIRE_CENTER, zoom: 11.5, pitch: 55, bearing: -20, duration: 2500 });
+      map.flyTo({ center: FIRE_CENTER, zoom: 13, pitch: 60, bearing: -20, duration: 2500 });
     }
   }, [viewLevel, mapLoaded]);
 
@@ -382,7 +291,7 @@ export function WildfireMap() {
     };
   }, []);
 
-  // Memoized GeoJSON — stable references prevent MapLibre from seeing new source data every render
+  // Memoized GeoJSON — stable references prevent Mapbox from seeing new source data every render
   const fireRing3h = useMemo(() => createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.threeHour), []);
   const fireRing1h = useMemo(() => createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.oneHour), []);
   const fireCurrent = useMemo(() => createCircleGeoJSON(FIRE_CENTER, FIRE_SPREAD.current), []);
@@ -418,6 +327,7 @@ export function WildfireMap() {
     >
       <Map
         ref={mapRef}
+        mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
         initialViewState={{ longitude: -96.0, latitude: 60.0, zoom: 3.2, pitch: 0, bearing: 0 }}
         onMove={(evt: ViewStateChangeEvent) => {
           if (moveRaf.current) cancelAnimationFrame(moveRaf.current);
@@ -429,18 +339,71 @@ export function WildfireMap() {
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        onLoad={() => setMapLoaded(true)}
-        mapStyle={DARK_STYLE}
+        onLoad={() => {
+          setMapLoaded(true);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mb = (mapRef.current as any)?.getMap();
+          if (!mb) return;
+
+          mb.setProjection({ name: "globe" });
+          mb.setFog({
+            color: "rgb(180, 210, 240)",
+            "high-color": "rgb(30, 80, 200)",
+            "horizon-blend": 0.04,
+            "space-color": "rgb(6, 8, 20)",
+            "star-intensity": 0.5,
+          });
+
+          // Re-add terrain DEM after every style switch (style.load clears raw API additions)
+          const applyTerrain = () => {
+            if (!mb.getSource("mapbox-dem")) {
+              mb.addSource("mapbox-dem", {
+                type: "raster-dem",
+                url: "mapbox://mapbox.mapbox-terrain-dem-v1",
+                tileSize: 512,
+                maxzoom: 14,
+              });
+            }
+            mb.setTerrain({ source: "mapbox-dem", exaggeration: 1.4 });
+          };
+
+          mb.on("style.load", applyTerrain);
+          applyTerrain();
+        }}
+        mapStyle={viewLevel === "national" ? DARK_STYLE : SATELLITE_STYLE}
         maxBounds={CANADA_MAX_BOUNDS}
         style={{ width: "100%", height: "100%" }}
         antialias={true}
         attributionControl={false}
       >
-        {/* Topographic layers — vegetation, water, roads (carto source, no extra requests) */}
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        {mapLoaded && TOPO_LAYERS.map((spec) => <Layer key={spec.id} {...(spec as any)} />)}
+        {mapLoaded && viewLevel !== "national" && (
+          <Layer
+            id="3d-buildings"
+            source="composite"
+            source-layer="building"
+            filter={["==", "extrude", "true"]}
+            type="fill-extrusion"
+            minzoom={14}
+            paint={{
+              "fill-extrusion-color": [
+                "interpolate",
+                ["linear"],
+                ["get", "height"],
+                0,  "#4b5563",
+                20, "#6b7280",
+                50, "#9ca3af",
+                100,"#d1d5db",
+              ],
+              "fill-extrusion-height": ["get", "height"],
+              "fill-extrusion-base": ["get", "min_height"],
+              "fill-extrusion-opacity": 0.85,
+              "fill-extrusion-vertical-gradient": true,
+              "fill-extrusion-ambient-occlusion-intensity": 0.4,
+              "fill-extrusion-ambient-occlusion-radius": 3,
+            }}
+          />
+        )}
 
-        {/* Province boundaries from ArcGIS + reliable hand-coded label centroids */}
         {mapLoaded && viewLevel !== "incident" && (
           <>
             <Source id="arcgis-provinces" type="geojson" data={ARCGIS_PROVINCES_URL}>
@@ -476,14 +439,13 @@ export function WildfireMap() {
               />
             </Source>
 
-            {/* Province name labels — hand-coded centroids so field names are known */}
             <Source id="province-label-points" type="geojson" data={CANADA_PROVINCE_LABELS_GEOJSON}>
               <Layer
                 id="province-labels"
                 type="symbol"
                 layout={{
                   "symbol-placement": "point",
-                  "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+                  "text-font": ["Open Sans SemiBold", "Arial Unicode MS Bold"],
                   "text-size": [
                     "interpolate", ["linear"], ["zoom"],
                     3, 9, 5, 11, 8, 13, 10, 15,
@@ -524,13 +486,8 @@ export function WildfireMap() {
           </>
         )}
 
-        {/* Measure line */}
         {measureLineGeoJSON && (
-          <Source
-            id="measure-line"
-            type="geojson"
-            data={measureLineGeoJSON}
-          >
+          <Source id="measure-line" type="geojson" data={measureLineGeoJSON}>
             <Layer
               id="measure-line-layer"
               type="line"
@@ -544,14 +501,12 @@ export function WildfireMap() {
           </Source>
         )}
 
-        {/* Measure point markers */}
         {measurePoints.map((pt, i) => (
           <Marker key={i} longitude={pt[0]} latitude={pt[1]} anchor="center">
             <div className="h-3 w-3 rounded-full bg-yellow-400 border-2 border-yellow-200 shadow shadow-yellow-400/50" />
           </Marker>
         ))}
 
-        {/* Firebreak road — incident view */}
         {mapLoaded && viewLevel === "incident" && (
           <Source id="firebreak-road" type="geojson" data={FIREBREAK_ROAD_GEOJSON}>
             <Layer
@@ -577,7 +532,6 @@ export function WildfireMap() {
           </Source>
         )}
 
-        {/* Fire spread rings — incident view */}
         {viewLevel === "incident" && (
           <>
             <Source id="fire-ring-3h" type="geojson" data={fireRing3h}>
@@ -595,7 +549,6 @@ export function WildfireMap() {
           </>
         )}
 
-        {/* Planned burn line — completed */}
         {viewLevel === "incident" && burnLineGeoJSON && (
           <Source id="planned-burn-line" type="geojson" data={burnLineGeoJSON}>
             <Layer
@@ -611,7 +564,6 @@ export function WildfireMap() {
           </Source>
         )}
 
-        {/* Planned burn line — preview while drawing */}
         {viewLevel === "incident" && burnPreviewGeoJSON && (
           <Source id="planned-burn-preview" type="geojson" data={burnPreviewGeoJSON}>
             <Layer
@@ -622,14 +574,12 @@ export function WildfireMap() {
           </Source>
         )}
 
-        {/* Planned burn anchor point (first click) */}
         {viewLevel === "incident" && plannedBurnPoints.length >= 1 && (
           <Marker longitude={plannedBurnPoints[0][0]} latitude={plannedBurnPoints[0][1]} anchor="center">
             <div className="h-3 w-3 rounded-full bg-orange-500 border-2 border-orange-300 shadow shadow-orange-500/50" />
           </Marker>
         )}
 
-        {/* Fire dot — national & province */}
         {(viewLevel === "national" || viewLevel === "province") && (
           <Marker longitude={FIRE_CENTER[0]} latitude={FIRE_CENTER[1]} anchor="center">
             <div
@@ -644,14 +594,12 @@ export function WildfireMap() {
           </Marker>
         )}
 
-        {/* Fire center dot — incident */}
         {viewLevel === "incident" && (
           <Marker longitude={FIRE_CENTER[0]} latitude={FIRE_CENTER[1]} anchor="center">
             <div className="h-5 w-5 rounded-full bg-red-600 border-2 border-red-300 shadow-lg shadow-red-500/60 fire-dot" />
           </Marker>
         )}
 
-        {/* Province view: warning popup */}
         {viewLevel === "province" && (
           <Marker longitude={FIRE_CENTER[0]} latitude={FIRE_CENTER[1] + 0.08} anchor="bottom">
             <AnimatePresence>
@@ -662,7 +610,6 @@ export function WildfireMap() {
           </Marker>
         )}
 
-        {/* Deployed resource markers (not planned burn — shown as line) */}
         {viewLevel === "incident" &&
           deployedResources
             .filter((r) => r.type !== "planned-burn")
@@ -674,7 +621,6 @@ export function WildfireMap() {
               ) : null
             )}
 
-        {/* Ghost placement indicator follows mouse (point placements only) */}
         {viewLevel === "incident" &&
           selectedResource &&
           selectedResource.type !== "planned-burn" &&
@@ -685,7 +631,6 @@ export function WildfireMap() {
           )}
       </Map>
 
-      {/* HUD: view level indicator — province and incident only */}
       {viewLevel !== "national" && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
           <motion.div
@@ -710,7 +655,6 @@ export function WildfireMap() {
         </div>
       )}
 
-      {/* Spread legend */}
       {viewLevel === "incident" && (
         <div className="absolute bottom-28 right-4 z-10 pointer-events-none">
           <div className="bg-zinc-950/80 border border-zinc-800 backdrop-blur-sm px-3 py-2 space-y-1.5">
