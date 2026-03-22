@@ -12,4 +12,6 @@ Requires-Dist: shapely<3.0,>=2.0
 Requires-Dist: xgboost<3.0,>=2.0
 Requires-Dist: scikit-learn<2.0,>=1.5
 Requires-Dist: pandas<3.0,>=2.2
+Requires-Dist: gymnasium<1.0,>=0.29
+Requires-Dist: stable-baselines3<3.0,>=2.3
 Requires-Dist: boto3>=1.42.73

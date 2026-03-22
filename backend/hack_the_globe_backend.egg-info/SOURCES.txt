@@ -23,4 +23,7 @@ src/ingestion/dummy.py
 src/ingestion/firms.py
 src/ingestion/weather.py
 src/models/__init__.py
+src/models/fire_env.py
+src/models/rl_agent.py
 src/models/spread_model.py
+src/models/train_rl_agent.py
