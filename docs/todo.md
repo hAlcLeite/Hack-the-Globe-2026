@@ -1,67 +1,50 @@
-# CanopyOS Backend — To-Do List
+# CanopyOS — Project To-Do
 
-## Phase 1: Skeleton + Dummy Data ✅
-- [x] Set up `pyproject.toml` with `uv`
-- [x] Scaffold `backend/src/` directory structure
-  - [x] `main.py` — FastAPI app entry point
-  - [x] `core/config.py` — environment variable loader
-  - [x] `api/fires.py` — fire incident routes
-  - [x] `api/predictions.py` — burn probability map routes
-  - [x] `api/assets.py` — first-responder asset routes
-  - [x] `api/choke_points.py` — RL choke point recommendation routes
-  - [x] `ingestion/dummy.py` — dummy data generators for all above
+## ✅ Phase 1: Skeleton + Dummy Data
+- [x] FastAPI app scaffold (`main.py`, routers, config)
+- [x] All 4 API endpoints with dummy data (fires, predictions, assets, choke_points)
+- [x] DynamoDB integration (`core/db.py` — read + write helpers)
+- [x] Seed script (`core/seed_db.py`) — 4 demo fires seeded live to AWS
 
-## Phase 2: Real Data Ingestion
-- [x] **NASA FIRMS ingestion** (`ingestion/firms.py`)
-  - [x] Sign up for free API key at https://firms.modaps.eosdis.nasa.gov/api/area/
-  - [x] Pull MODIS/VIIRS active fire hotspots for Canada (bounding box)
-  - [x] Normalize to `FireEvent` schema
-- [ ] **CWFIS/NRCan ingestion** (`ingestion/cwfis.py`)
-  - Pull national active fire perimeters (GeoJSON, no auth needed)
-  - Pull CFFDRS fire danger indices (FWI, ISI, BUI)
-- [ ] **BC Wildfire Service ingestion** (`ingestion/bcws.py`)
-  - Pull ArcGIS REST endpoints for active BC fire polygons
-  - Normalize to `FireEvent` schema
-- [ ] **Alberta Wildfire ingestion** (`ingestion/ab_wildfire.py`)
-  - Pull ArcGIS REST endpoints for Alberta fire polygons
-- [ ] **ECCC Datamart ingestion** (`ingestion/eccc.py`)
-  - Pull HRDPS wind vectors (speed + direction) for fire zones
-  - Pull temperature and humidity for CFFDRS index calculation
-- [x] **DynamoDB integration** (`core/db.py`)
-  - [x] Set up `boto3` client with environment credentials
-  - [x] Write helpers: `put_fire_event` — seeded 3 fires live ✅
-  - [x] Read helpers: `get_fire_event`, `get_all_fire_events`
-  - [x] `GET /api/v1/fires` and `GET /api/v1/fires/{fire_id}` read from DynamoDB
+## ✅ Phase 2: Real Data Ingestion
+- [x] **NASA FIRMS** (`ingestion/firms.py`) — VIIRS satellite hotspots, BC + AB
+- [x] **CWFIS Active Fires** (`ingestion/cwfis.py`) — NRCan official fire CSV, no auth
+- [x] **Open-Meteo Weather** (`ingestion/weather.py`) — wind, temp, humidity, dew point per fire. Verified 4/4 fires ✅
+- [x] **CFFDRS Indices** (`ingestion/cffdrs.py`) — FWI, ISI, BUI from NRCan stations
+  - ⚠️ Currently 0/4 fires matched — March off-season, stations not reporting FWI. Using synthetic fallback in model.
+- [x] `GET /api/v1/fires/live` → real-time NASA FIRMS data
+- [x] Frontend wired to backend — map renders all 4 DynamoDB fires as live markers
 
-## Phase 3: ML Models
-- [ ] **XGBoost Spread Model** (`models/spread_model.py`)
-  - Define feature vector: `[wind_speed, wind_dir, humidity, temp, FWI, ISI, BUI, slope, fuel_type]`
-  - Train on historical CWFIS spread data OR use pre-trained weights
-  - Expose `predict_spread(fire_id) -> BurnProbabilityGrid` function
-  - Wire into `GET /api/v1/predictions/{fire_id}`
+## ✅ Phase 3a: XGBoost Spread Model
+- [x] `models/spread_model.py` — XGBoost v2 with 11 features
+- [x] Synthetic Rothermel-physics training data (6,000 samples)
+- [x] Wind U/V decomposition, slope factor, and RH trend features
+- [x] R² = 0.977, MAE = 421m (1h) / 1323m (3h) on held-out test set ✅
+- [x] Weights saved to `src/models/spread_1h_model.joblib` + `spread_3h_model.joblib`
+- [x] `GET /api/v1/predictions/{fire_id}` → real XGBoost predictions wired in
 
-- [ ] **RL Tactical Agent — MVP Greedy Heuristic** (`models/rl_agent.py`)
-  - Score candidate choke points: `burn_probability × perimeter_vulnerability × accessibility`
-  - Rank top N choke points per available asset type (crews, dozers, aircraft)
-  - Expose `recommend_deployment(fire_id, assets) -> List[ChokepointRecommendation]`
-  - Wire into `GET /api/v1/choke_points/{fire_id}`
+## ✅ Phase 3b: PPO Tactical Agent
+- [x] Added `gymnasium` + `stable-baselines3` deps
+- [x] `models/fire_env.py` — 50×50 cellular automata `gymnasium.Env` wired to XGBoost spread rate
+- [x] `models/train_rl_agent.py` — Trained 50,000 timesteps. Reward improved from -84 to +22 ✅
+- [x] Weights saved to `src/models/tactical_ppo_agent.zip`
+- [x] `models/rl_agent.py` — inference script with greedy geometric fallback safety net
+- [x] Updated `api/choke_points.py` — real PPO pipeline active
 
-- [ ] **RL Tactical Agent — V2 DRL** (stretch goal)
-  - Set up `ray[rllib]` training environment simulating fire spread + asset constraints
-  - Train policy and export trained weights
-  - Replace greedy heuristic with policy inference
+## 🔲 Phase 4: Demo Day Polish
+- [ ] Start frontend + verify map renders
+- [ ] Re-seed DynamoDB if necessary: `uv run python -m src.core.seed_db`
+- [ ] Connect PPO output visualizer to Frontend Map lines (currently hardcoded)
+- [ ] Commit + push to `frontend_integration` branch, open PR to `main`
+- [ ] Test full demo flow end-to-end:
+  1. National view → 4 fire dots
+  2. Click Okanagan → province view → incident card
+  3. Mission Control → spread rings from XGBoost
+  4. AI Choke points from PPO agent drawn on map
+  5. Deploy assets → submit mission
 
-## Phase 4: API Hardening + Testing
-- [ ] Add FastAPI background task scheduler (poll ingestion every 5 min)
-- [ ] Add Pydantic response validation to all endpoints
-- [ ] Write `pytest` tests for all ingestion normalizers (`tests/`)
-- [ ] Add `/health` endpoint and basic error handling middleware
-- [ ] Set up CORS middleware for frontend integration
-- [ ] Containerize with `Dockerfile` (stretch goal)
-
-## Environment Variables Needed (`.env`)
-- [ ] `NASA_FIRMS_API_KEY` — from https://firms.modaps.eosdis.nasa.gov
-- [x] `AWS_ACCESS_KEY_ID` — configured ✅
-- [x] `AWS_SECRET_ACCESS_KEY` — configured ✅
-- [x] `AWS_REGION` — `ca-central-1` ✅
-- [x] `DYNAMODB_TABLE_NAME` — `canopy-os-events` ✅
+## Environment Variables
+- [x] `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` + `AWS_REGION`
+- [x] `DYNAMODB_TABLE_NAME=canopy-os-events`
+- [x] `NASA_FIRMS_API_KEY`
+- [x] `USE_DUMMY_DATA=False`

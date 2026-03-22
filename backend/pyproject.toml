@@ -18,13 +18,15 @@ dependencies = [
   "httpx>=0.27,<1.0",
   # Geospatial
   "shapely>=2.0,<3.0",
-  # --- Phase 2: ML & AWS (uncomment when ready) ---
-  # "xgboost>=2.0,<3.0",
-  # "scikit-learn>=1.5,<2.0",
-  # "pandas>=2.2,<3.0",
-  # "geopandas>=0.14,<1.0",
-  # "boto3>=1.34,<2.0",
+  # --- Phase 3: ML ---
+  "xgboost>=2.0,<3.0",
+  "scikit-learn>=1.5,<2.0",
+  "pandas>=2.2,<3.0",
+  # --- Phase 3b: RL Agent ---
+  "gymnasium>=0.29,<1.0",
+  "stable-baselines3>=2.3,<3.0",
   "boto3>=1.42.73",
+
 ]
 
 [tool.setuptools.packages.find]
